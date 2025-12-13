@@ -11,7 +11,7 @@ class AnomalyProvider extends ChangeNotifier {
   Anomaly? _selectedAnomaly;
   bool _isLoading = false;
   String? _error;
-  bool _useMockData = true; // Use mock data by default
+  bool _useMockData = false; // Use real Firebase data
 
   // Filters
   AnomalyStatus? _statusFilter;

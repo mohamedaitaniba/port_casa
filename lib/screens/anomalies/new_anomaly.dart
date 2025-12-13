@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import '../../data/mock_data.dart';
 import '../../models/anomaly.dart';
+import '../../providers/anomaly_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/firebase_storage_service.dart';
 import '../../theme/app_theme.dart';
 
 class NewAnomalyScreen extends StatefulWidget {
@@ -18,13 +23,15 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final _imagePicker = ImagePicker();
+  final _storageService = FirebaseStorageService();
   
   DateTime _selectedDate = DateTime.now();
-  AnomalyCategory _selectedCategory = AnomalyCategory.mecanique;
   AnomalyPriority _selectedPriority = AnomalyPriority.medium;
   String? _selectedDepartment;
   bool _isLoading = false;
-  String? _photoPath;
+  File? _selectedImage;
+  String _uploadStatus = '';
 
   final List<String> _departments = [
     'Maintenance',
@@ -94,10 +101,9 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
                 child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
               ),
               title: Text('Prendre une photo', style: GoogleFonts.poppins()),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Implement camera
-                setState(() => _photoPath = 'camera_photo');
+                await _pickFromCamera();
               },
             ),
             ListTile(
@@ -110,10 +116,9 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
                 child: const Icon(Icons.photo_library_rounded, color: AppColors.secondary),
               ),
               title: Text('Choisir de la galerie', style: GoogleFonts.poppins()),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Implement gallery
-                setState(() => _photoPath = 'gallery_photo');
+                await _pickFromGallery();
               },
             ),
             SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
@@ -121,6 +126,50 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickFromCamera() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+      if (image != null) {
+        setState(() => _selectedImage = File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'accès à la caméra: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+      if (image != null) {
+        setState(() => _selectedImage = File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'accès à la galerie: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _saveDraft() async {
@@ -148,51 +197,120 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-
-    // Create anomaly
-    final anomaly = Anomaly(
-      id: const Uuid().v4(),
-      title: _titleController.text,
-      description: _descriptionController.text,
-      date: _selectedDate,
-      location: _locationController.text,
-      category: _selectedCategory,
-      priority: _selectedPriority,
-      status: AnomalyStatus.ouvert,
-      createdBy: 'Utilisateur actuel',
-      createdAt: DateTime.now(),
-      department: _selectedDepartment,
-    );
-
-    // Add to mock data (in real app, send to Firebase)
-    MockData.anomalies.insert(0, anomaly);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      
+    // Check if department is selected
+    if (_selectedDepartment == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const Icon(Icons.warning_rounded, color: Colors.white),
               const SizedBox(width: 12),
               Text(
-                'Anomalie créée avec succès',
+                'Veuillez sélectionner un département',
                 style: GoogleFonts.poppins(color: Colors.white),
               ),
             ],
           ),
-          backgroundColor: AppColors.success,
+          backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      
-      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _uploadStatus = '';
+    });
+
+    try {
+      // Get current user info
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.appUser;
+      final createdBy = currentUser?.name ?? authProvider.firebaseUser?.email ?? 'Utilisateur';
+
+      // Upload image if selected
+      String? photoUrl;
+      if (_selectedImage != null) {
+        setState(() => _uploadStatus = 'Upload de l\'image...');
+        
+        final xFile = XFile(_selectedImage!.path);
+        photoUrl = await _storageService.uploadImage(xFile, folder: 'anomalies');
+      }
+
+      setState(() => _uploadStatus = 'Création de l\'anomalie...');
+
+      // Get category based on department
+      AnomalyCategory category = _getCategoryFromDepartment(_selectedDepartment);
+
+      // Create anomaly with photo URL
+      final anomaly = Anomaly(
+        id: const Uuid().v4(),
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        date: _selectedDate,
+        location: _locationController.text.trim(),
+        category: category,
+        priority: _selectedPriority,
+        status: AnomalyStatus.ouvert,
+        createdBy: createdBy,
+        createdAt: DateTime.now(),
+        department: _selectedDepartment,
+        photoUrl: photoUrl,
+      );
+
+      // Save to Firebase using provider
+      final anomalyProvider = Provider.of<AnomalyProvider>(context, listen: false);
+      await anomalyProvider.createAnomaly(anomaly);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'Anomalie créée avec succès',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Erreur: ${e.toString()}',
+                    style: GoogleFonts.poppins(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 
@@ -291,13 +409,8 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
               const SizedBox(height: 20),
               
               // Department
-              _buildInputLabel('Département'),
+              _buildInputLabel('Département *'),
               _buildDropdown(),
-              const SizedBox(height: 20),
-              
-              // Category
-              _buildInputLabel('Catégorie'),
-              _buildCategorySelector(),
               const SizedBox(height: 20),
               
               // Priority
@@ -371,46 +484,71 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
     return GestureDetector(
       onTap: _pickImage,
       child: Container(
-        height: 180,
+        height: 200,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: AppColors.border,
+            color: _selectedImage != null ? AppColors.success : AppColors.border,
             style: BorderStyle.solid,
             width: 2,
           ),
         ),
-        child: _photoPath != null
+        child: _selectedImage != null
             ? Stack(
                 children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_rounded,
-                          size: 48,
-                          color: AppColors.success,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Photo ajoutée',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.file(
+                      _selectedImage!,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: IconButton(
-                      onPressed: () => setState(() => _photoPath = null),
-                      icon: const Icon(Icons.close_rounded, color: AppColors.error),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedImage = null),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Photo ajoutée',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -506,49 +644,6 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
           onChanged: (value) => setState(() => _selectedDepartment = value),
         ),
       ),
-    );
-  }
-
-  Widget _buildCategorySelector() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: AnomalyCategory.values.map((category) {
-        final isSelected = _selectedCategory == category;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedCategory = category),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.border,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _getCategoryIcon(category),
-                  size: 18,
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  category.label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -656,13 +751,31 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
                 ),
               ),
               child: _isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        if (_uploadStatus.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              _uploadStatus,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
                     )
                   : Text(
                       'Soumettre',
@@ -679,20 +792,22 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
     );
   }
 
-  IconData _getCategoryIcon(AnomalyCategory category) {
-    switch (category) {
-      case AnomalyCategory.mecanique:
-        return Icons.build_rounded;
-      case AnomalyCategory.electrique:
-        return Icons.electric_bolt_rounded;
-      case AnomalyCategory.hse:
-        return Icons.health_and_safety_rounded;
-      case AnomalyCategory.infrastructure:
-        return Icons.foundation_rounded;
-      case AnomalyCategory.securite:
-        return Icons.security_rounded;
-      case AnomalyCategory.environnement:
-        return Icons.eco_rounded;
+  AnomalyCategory _getCategoryFromDepartment(String? department) {
+    switch (department) {
+      case 'Maintenance':
+        return AnomalyCategory.mecanique;
+      case 'Électricité':
+        return AnomalyCategory.electrique;
+      case 'HSE':
+        return AnomalyCategory.hse;
+      case 'Infrastructure':
+        return AnomalyCategory.infrastructure;
+      case 'Sécurité':
+        return AnomalyCategory.securite;
+      case 'Environnement':
+        return AnomalyCategory.environnement;
+      default:
+        return AnomalyCategory.mecanique;
     }
   }
 
