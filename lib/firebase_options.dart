@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBYuayK6BvTRHzZEeZ8ISmOJKcfQQ9za0I',
-    appId: '1:832242923912:web:325a954c9e2861fb3a223d',
-    messagingSenderId: '832242923912',
-    projectId: 'port-casa',
-    authDomain: 'port-casa.firebaseapp.com',
-    storageBucket: 'port-casa.firebasestorage.app',
-    measurementId: 'G-W2PZ2K62EF',
+    apiKey: 'AIzaSyD442gOBx3Sjg4bQvt49d29P_nRMhePuPw',
+    appId: '1:981862721318:web:20d4d9a284356041f543e7',
+    messagingSenderId: '981862721318',
+    projectId: 'port-casablanca',
+    authDomain: 'port-casablanca.firebaseapp.com',
+    storageBucket: 'port-casablanca.firebasestorage.app',
+    measurementId: 'G-WJSSV7DMY7',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDkgW_-7MugpdqF7i9R5wpnS9T14v_Uw-E',
-    appId: '1:832242923912:android:4927b87d5dd935123a223d',
-    messagingSenderId: '832242923912',
-    projectId: 'port-casa',
-    storageBucket: 'port-casa.firebasestorage.app',
+    apiKey: 'AIzaSyD5eSm8dqFsJ0jBT0Mql8J7ixqv2U5xpwg',
+    appId: '1:981862721318:android:9933c9dbe9fa1460f543e7',
+    messagingSenderId: '981862721318',
+    projectId: 'port-casablanca',
+    storageBucket: 'port-casablanca.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyD3gv3UJ2h2WhHhch8r5shUk5iWzPzz-64',
-    appId: '1:832242923912:ios:e487294a48e101a83a223d',
-    messagingSenderId: '832242923912',
-    projectId: 'port-casa',
-    storageBucket: 'port-casa.firebasestorage.app',
+    apiKey: 'AIzaSyDWvgmwtALdL85kiouuVCJDcIl0t5CTDos',
+    appId: '1:981862721318:ios:1dcaa7b704134990f543e7',
+    messagingSenderId: '981862721318',
+    projectId: 'port-casablanca',
+    storageBucket: 'port-casablanca.firebasestorage.app',
     iosBundleId: 'com.example.portCasa',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyD3gv3UJ2h2WhHhch8r5shUk5iWzPzz-64',
-    appId: '1:832242923912:ios:e487294a48e101a83a223d',
-    messagingSenderId: '832242923912',
-    projectId: 'port-casa',
-    storageBucket: 'port-casa.firebasestorage.app',
+    apiKey: 'AIzaSyDWvgmwtALdL85kiouuVCJDcIl0t5CTDos',
+    appId: '1:981862721318:ios:1dcaa7b704134990f543e7',
+    messagingSenderId: '981862721318',
+    projectId: 'port-casablanca',
+    storageBucket: 'port-casablanca.firebasestorage.app',
     iosBundleId: 'com.example.portCasa',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBYuayK6BvTRHzZEeZ8ISmOJKcfQQ9za0I',
-    appId: '1:832242923912:web:623687af2ab0b1513a223d',
-    messagingSenderId: '832242923912',
-    projectId: 'port-casa',
-    authDomain: 'port-casa.firebaseapp.com',
-    storageBucket: 'port-casa.firebasestorage.app',
-    measurementId: 'G-1XCBX4T6K2',
+    apiKey: 'AIzaSyD442gOBx3Sjg4bQvt49d29P_nRMhePuPw',
+    appId: '1:981862721318:web:025f116d76a92588f543e7',
+    messagingSenderId: '981862721318',
+    projectId: 'port-casablanca',
+    authDomain: 'port-casablanca.firebaseapp.com',
+    storageBucket: 'port-casablanca.firebasestorage.app',
+    measurementId: 'G-Z5GZ277XL4',
   );
 }

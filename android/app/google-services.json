@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "832242923912",
-    "project_id": "port-casa",
-    "storage_bucket": "port-casa.firebasestorage.app"
+    "project_number": "981862721318",
+    "project_id": "port-casablanca",
+    "storage_bucket": "port-casablanca.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:832242923912:android:4927b87d5dd935123a223d",
+        "mobilesdk_app_id": "1:981862721318:android:9933c9dbe9fa1460f543e7",
         "android_client_info": {
           "package_name": "com.example.port_casa"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDkgW_-7MugpdqF7i9R5wpnS9T14v_Uw-E"
+          "current_key": "AIzaSyD5eSm8dqFsJ0jBT0Mql8J7ixqv2U5xpwg"
         }
       ],
       "services": {
