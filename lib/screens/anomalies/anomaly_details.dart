@@ -1,17 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/anomaly.dart';
+import '../../models/comment.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/comment_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/status_badge.dart';
 
-class AnomalyDetailsScreen extends StatelessWidget {
+class AnomalyDetailsScreen extends StatefulWidget {
   final Anomaly anomaly;
 
   const AnomalyDetailsScreen({
     super.key,
     required this.anomaly,
   });
+
+  @override
+  State<AnomalyDetailsScreen> createState() => _AnomalyDetailsScreenState();
+}
+
+class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
+  final _commentService = CommentService();
+  final _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +39,7 @@ class AnomalyDetailsScreen extends StatelessWidget {
         slivers: [
           _buildAppBar(context),
           SliverToBoxAdapter(child: _buildContent(context)),
+          SliverToBoxAdapter(child: _buildCommentsSection()),
         ],
       ),
       bottomNavigationBar: _buildBottomActions(context),
@@ -29,7 +48,7 @@ class AnomalyDetailsScreen extends StatelessWidget {
 
   Widget _buildAppBar(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: anomaly.photoUrl != null ? 250 : 120,
+      expandedHeight: widget.anomaly.photoUrl != null ? 250 : 120,
       pinned: true,
       backgroundColor: AppColors.primary,
       leading: IconButton(
@@ -73,9 +92,9 @@ class AnomalyDetailsScreen extends StatelessWidget {
         const SizedBox(width: 8),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: anomaly.photoUrl != null
+        background: widget.anomaly.photoUrl != null
             ? Image.network(
-                anomaly.photoUrl!,
+                widget.anomaly.photoUrl!,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: AppColors.primary,
@@ -107,14 +126,14 @@ class AnomalyDetailsScreen extends StatelessWidget {
           // Title and badges
           Row(
             children: [
-              StatusBadge(status: anomaly.status),
+              StatusBadge(status: widget.anomaly.status),
               const SizedBox(width: 8),
-              PriorityBadge(priority: anomaly.priority),
+              PriorityBadge(priority: widget.anomaly.priority),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            anomaly.title,
+            widget.anomaly.title,
             style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -122,20 +141,20 @@ class AnomalyDetailsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          CategoryBadge(category: anomaly.category),
+          CategoryBadge(category: widget.anomaly.category),
           const SizedBox(height: 24),
           
           // Info cards
           _buildInfoCard(
             icon: Icons.description_outlined,
             title: 'Description',
-            content: anomaly.description,
+            content: widget.anomaly.description,
           ),
           const SizedBox(height: 16),
           _buildInfoCard(
             icon: Icons.location_on_outlined,
             title: 'Localisation',
-            content: anomaly.location,
+            content: widget.anomaly.location,
           ),
           const SizedBox(height: 16),
           
@@ -232,14 +251,14 @@ class AnomalyDetailsScreen extends StatelessWidget {
                 child: _DetailItem(
                   icon: Icons.calendar_today_rounded,
                   label: 'Date',
-                  value: DateFormat('dd/MM/yyyy').format(anomaly.date),
+                  value: DateFormat('dd/MM/yyyy').format(widget.anomaly.date),
                 ),
               ),
               Expanded(
                 child: _DetailItem(
                   icon: Icons.access_time_rounded,
                   label: 'Heure',
-                  value: DateFormat('HH:mm').format(anomaly.date),
+                  value: DateFormat('HH:mm').format(widget.anomaly.date),
                 ),
               ),
             ],
@@ -251,24 +270,24 @@ class AnomalyDetailsScreen extends StatelessWidget {
                 child: _DetailItem(
                   icon: Icons.person_outline_rounded,
                   label: 'Créé par',
-                  value: anomaly.createdBy,
+                  value: widget.anomaly.createdBy,
                 ),
               ),
               Expanded(
                 child: _DetailItem(
                   icon: Icons.person_add_alt_rounded,
                   label: 'Assigné à',
-                  value: anomaly.assignedTo ?? 'Non assigné',
+                  value: widget.anomaly.assignedTo ?? 'Non assigné',
                 ),
               ),
             ],
           ),
-          if (anomaly.department != null) ...[
+          if (widget.anomaly.department != null) ...[
             const SizedBox(height: 16),
             _DetailItem(
               icon: Icons.business_rounded,
               label: 'Département',
-              value: anomaly.department!,
+              value: widget.anomaly.department!,
             ),
           ],
         ],
@@ -320,23 +339,23 @@ class AnomalyDetailsScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _TimelineItem(
             title: 'Anomalie créée',
-            description: 'Créée par ${anomaly.createdBy}',
-            time: anomaly.createdAt,
+            description: 'Créée par ${widget.anomaly.createdBy}',
+            time: widget.anomaly.createdAt,
             isFirst: true,
-            isLast: anomaly.status == AnomalyStatus.ouvert,
+            isLast: widget.anomaly.status == AnomalyStatus.ouvert,
           ),
-          if (anomaly.status != AnomalyStatus.ouvert)
+          if (widget.anomaly.status != AnomalyStatus.ouvert)
             _TimelineItem(
               title: 'Prise en charge',
-              description: 'Assignée à ${anomaly.assignedTo ?? "l\'équipe"}',
-              time: anomaly.createdAt.add(const Duration(hours: 2)),
-              isLast: anomaly.status == AnomalyStatus.enCours,
+              description: 'Assignée à ${widget.anomaly.assignedTo ?? "l'équipe"}',
+              time: widget.anomaly.createdAt.add(const Duration(hours: 2)),
+              isLast: widget.anomaly.status == AnomalyStatus.enCours,
             ),
-          if (anomaly.status == AnomalyStatus.resolu)
+          if (widget.anomaly.status == AnomalyStatus.resolu)
             _TimelineItem(
               title: 'Anomalie résolue',
               description: 'Résolue avec succès',
-              time: anomaly.date,
+              time: widget.anomaly.date,
               isLast: true,
               color: AppColors.success,
             ),
@@ -365,7 +384,7 @@ class AnomalyDetailsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (anomaly.status != AnomalyStatus.resolu) ...[
+          if (widget.anomaly.status != AnomalyStatus.resolu) ...[
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () {
@@ -387,10 +406,10 @@ class AnomalyDetailsScreen extends StatelessWidget {
             const SizedBox(width: 12),
           ],
           Expanded(
-            flex: anomaly.status != AnomalyStatus.resolu ? 1 : 2,
+            flex: widget.anomaly.status != AnomalyStatus.resolu ? 1 : 2,
             child: ElevatedButton.icon(
               onPressed: () {
-                // TODO: Add comment
+                _showCommentDialog(context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -476,7 +495,7 @@ class AnomalyDetailsScreen extends StatelessWidget {
                 color: _getStatusColor(status),
               ),
               title: Text(status.labelFr, style: GoogleFonts.poppins()),
-              selected: anomaly.status == status,
+              selected: widget.anomaly.status == status,
               onTap: () {
                 Navigator.pop(context);
                 // TODO: Update status
@@ -508,6 +527,582 @@ class AnomalyDetailsScreen extends StatelessWidget {
       case AnomalyStatus.resolu:
         return AppColors.statusResolved;
     }
+  }
+
+  void _showCommentDialog(BuildContext context) {
+    _commentController.clear();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.add_comment_rounded,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Ajouter un commentaire',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: TextField(
+          controller: _commentController,
+          maxLines: 5,
+          style: GoogleFonts.poppins(fontSize: 15),
+          decoration: InputDecoration(
+            hintText: 'Écrivez votre commentaire...',
+            hintStyle: GoogleFonts.poppins(
+              color: AppColors.textLight,
+              fontSize: 15,
+            ),
+            filled: true,
+            fillColor: AppColors.background,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Annuler',
+              style: GoogleFonts.poppins(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (_commentController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Veuillez entrer un commentaire',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                final currentUser = authProvider.appUser;
+                final createdBy = currentUser?.name ?? authProvider.firebaseUser?.email ?? 'Utilisateur';
+
+                final comment = Comment(
+                  id: '',
+                  anomalyId: widget.anomaly.id,
+                  text: _commentController.text.trim(),
+                  createdBy: createdBy,
+                  createdAt: DateTime.now(),
+                );
+
+                await _commentService.addComment(comment);
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Commentaire ajouté',
+                            style: GoogleFonts.poppins(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Erreur: $e',
+                        style: GoogleFonts.poppins(),
+                      ),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'Publier',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentsSection() {
+    return StreamBuilder<List<Comment>>(
+      stream: _commentService.getCommentsStream(widget.anomaly.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: Text(
+                'Erreur lors du chargement des commentaires',
+                style: GoogleFonts.poppins(color: AppColors.error),
+              ),
+            ),
+          );
+        }
+
+        final comments = snapshot.data ?? [];
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Commentaires',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (comments.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${comments.length}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (comments.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.comment_outlined,
+                          size: 48,
+                          color: AppColors.textLight.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Aucun commentaire',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Soyez le premier à commenter',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...comments.map((comment) => _CommentCard(
+                  comment: comment,
+                  commentService: _commentService,
+                )),
+              const SizedBox(height: 100),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CommentCard extends StatefulWidget {
+  final Comment comment;
+  final CommentService commentService;
+
+  const _CommentCard({
+    required this.comment,
+    required this.commentService,
+  });
+
+  @override
+  State<_CommentCard> createState() => _CommentCardState();
+}
+
+class _CommentCardState extends State<_CommentCard> {
+  final _editController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _editController.text = widget.comment.text;
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  bool _canEdit() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.appUser;
+    final currentUserName = currentUser?.name ?? authProvider.firebaseUser?.email ?? '';
+    
+    // Check if comment belongs to current user (case-insensitive comparison)
+    if (widget.comment.createdBy.toLowerCase().trim() != currentUserName.toLowerCase().trim()) {
+      return false;
+    }
+    
+    // Check if comment was posted within last 1 minute
+    final now = DateTime.now();
+    final diff = now.difference(widget.comment.createdAt);
+    return diff.inMinutes < 1 || (diff.inMinutes == 1 && diff.inSeconds < 60);
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+
+    if (diff.inMinutes < 1) {
+      return 'À l\'instant';
+    } else if (diff.inMinutes < 60) {
+      return 'Il y a ${diff.inMinutes} min';
+    } else if (diff.inHours < 24) {
+      return 'Il y a ${diff.inHours}h';
+    } else if (diff.inDays < 7) {
+      return 'Il y a ${diff.inDays}j';
+    } else {
+      return DateFormat('dd MMM yyyy à HH:mm', 'fr_FR').format(time);
+    }
+  }
+
+  void _showEditDialog(BuildContext context) {
+    _editController.text = widget.comment.text;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.edit_rounded,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Modifier le commentaire',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: TextField(
+          controller: _editController,
+          maxLines: 5,
+          style: GoogleFonts.poppins(fontSize: 15),
+          decoration: InputDecoration(
+            hintText: 'Écrivez votre commentaire...',
+            hintStyle: GoogleFonts.poppins(
+              color: AppColors.textLight,
+              fontSize: 15,
+            ),
+            filled: true,
+            fillColor: AppColors.background,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Annuler',
+              style: GoogleFonts.poppins(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (_editController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Le commentaire ne peut pas être vide',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await widget.commentService.updateComment(
+                  widget.comment.id,
+                  _editController.text.trim(),
+                );
+                
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Commentaire modifié',
+                            style: GoogleFonts.poppins(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Erreur: $e',
+                        style: GoogleFonts.poppins(),
+                      ),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'Enregistrer',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canEdit = _canEdit();
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.primaryLight],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Center(
+                  child: Text(
+                    widget.comment.createdBy.isNotEmpty
+                        ? widget.comment.createdBy[0].toUpperCase()
+                        : 'U',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.comment.createdBy,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      _formatTime(widget.comment.createdAt),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: AppColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canEdit)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _showEditDialog(context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            widget.comment.text,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: AppColors.textPrimary,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
