@@ -9,9 +9,49 @@ import '../../widgets/anomaly_card.dart';
 import '../../widgets/kpi_card.dart';
 import '../anomalies/anomaly_details.dart';
 import '../anomalies/new_anomaly.dart';
+import '../anomalies/drafts_screen.dart';
+import '../../services/offline_storage_service.dart';
 
-class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+class DashboardScreen extends StatefulWidget {
+  final VoidCallback? onNavigateToAnomalies;
+  
+  const DashboardScreen({super.key, this.onNavigateToAnomalies});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _draftCount = 0;
+  bool _isLoadingDrafts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDraftCount();
+    });
+  }
+
+  Future<void> _loadDraftCount() async {
+    if (!mounted) return;
+    
+    try {
+      final count = await OfflineStorageService().getDraftCount();
+      if (mounted) {
+        setState(() {
+          _draftCount = count;
+          _isLoadingDrafts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingDrafts = false;
+        });
+      }
+    }
+  }
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
@@ -74,6 +114,8 @@ class DashboardScreen extends StatelessWidget {
             SliverToBoxAdapter(child: _buildHeader(context)),
             // KPIs
             SliverToBoxAdapter(child: _buildKPIs(context)),
+            // Drafts Section
+            SliverToBoxAdapter(child: _buildDraftsSection(context)),
             // High Priority Alerts
             SliverToBoxAdapter(child: _buildHighPrioritySection(context)),
             // Recent Activity
@@ -83,11 +125,15 @@ class DashboardScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const NewAnomalyScreen()),
           );
+          // Reload draft count when returning (in case a draft was saved)
+          if (mounted) {
+            _loadDraftCount();
+          }
         },
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -103,137 +149,123 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bonjour 👋',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
+    return Consumer<AnomalyProvider>(
+      builder: (context, anomalyProvider, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Bonjour 👋',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Dashboard',
+                          style: GoogleFonts.poppins(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Dashboard',
-                  style: GoogleFonts.poppins(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.search_rounded,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          PopupMenuButton<String>(
-            offset: const Offset(0, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            onSelected: (value) {
-              if (value == 'logout') {
-                _showLogoutDialog(context);
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline_rounded, color: AppColors.textSecondary),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Mon profil',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
+                  // Connectivity & Sync Status - Always visible
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: !anomalyProvider.isOnline 
+                        ? AppColors.warning.withOpacity(0.1)
+                        : anomalyProvider.pendingCount > 0
+                          ? AppColors.info.withOpacity(0.1)
+                          : AppColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: !anomalyProvider.isOnline 
+                          ? AppColors.warning
+                          : anomalyProvider.pendingCount > 0
+                            ? AppColors.info
+                            : AppColors.success,
+                        width: 1.5,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Paramètres',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          !anomalyProvider.isOnline 
+                            ? Icons.cloud_off_rounded
+                            : anomalyProvider.pendingCount > 0
+                              ? Icons.sync_rounded
+                              : Icons.cloud_done_rounded,
+                          size: 16,
+                          color: !anomalyProvider.isOnline 
+                            ? AppColors.warning
+                            : anomalyProvider.pendingCount > 0
+                              ? AppColors.info
+                              : AppColors.success,
+                        ),
+                        const SizedBox(width: 6),
+                        if (anomalyProvider.pendingCount > 0)
+                          Text(
+                            '${anomalyProvider.pendingCount}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.info,
+                            ),
+                          )
+                        else if (anomalyProvider.isOnline)
+                          Text(
+                            'En ligne',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.success,
+                            ),
+                          ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    const Icon(Icons.logout_rounded, color: AppColors.error),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Déconnexion',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
+                  ),
+                  GestureDetector(
+                    onTap: () => _showLogoutDialog(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.logout_rounded,
                         color: AppColors.error,
+                        size: 24,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryLight],
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-              ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -302,6 +334,153 @@ class DashboardScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget _buildDraftsSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.drafts_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Mes Brouillons',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              if (_isLoadingDrafts)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                )
+              else if (_draftCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$_draftCount',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DraftsScreen(),
+                ),
+              );
+              // Reload draft count when returning from drafts screen
+              if (mounted) {
+                _loadDraftCount();
+              }
+            },
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.drafts_rounded,
+                          color: AppColors.primary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _draftCount > 0
+                                  ? '$_draftCount brouillon${_draftCount > 1 ? 's' : ''} enregistré${_draftCount > 1 ? 's' : ''}'
+                                  : 'Aucun brouillon',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _draftCount > 0
+                                  ? 'Appuyez pour voir et continuer vos brouillons'
+                                  : 'Vos brouillons apparaîtront ici',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.textLight,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
   }
 
   Widget _buildHighPrioritySection(BuildContext context) {
@@ -426,7 +605,11 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      if (widget.onNavigateToAnomalies != null) {
+                        widget.onNavigateToAnomalies!();
+                      }
+                    },
                     child: Text(
                       'Voir tout',
                       style: GoogleFonts.poppins(

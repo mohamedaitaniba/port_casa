@@ -187,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       setDialogState(() => isLoading = true);
 
                       final authProvider = Provider.of<AuthProvider>(
-                        context,
+        context,
                         listen: false,
                       );
                       await authProvider.resetPassword(

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../data/mock_data.dart';
+import 'package:provider/provider.dart';
 import '../../models/anomaly.dart';
+import '../../providers/anomaly_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/anomaly_card.dart';
 import 'anomaly_details.dart';
@@ -19,39 +20,20 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
   final TextEditingController _searchController = TextEditingController();
   AnomalyStatus? _selectedStatus;
   AnomalyCategory? _selectedCategory;
-  List<Anomaly> _filteredAnomalies = [];
-  String _searchQuery = '';
 
   @override
-  void initState() {
-    super.initState();
-    _filteredAnomalies = MockData.anomalies;
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _applyFilters() {
-    setState(() {
-      _filteredAnomalies = MockData.anomalies.where((anomaly) {
-        // Status filter
-        if (_selectedStatus != null && anomaly.status != _selectedStatus) {
-          return false;
-        }
-
-        // Category filter
-        if (_selectedCategory != null && anomaly.category != _selectedCategory) {
-          return false;
-        }
-
-        // Search query
-        if (_searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
-          return anomaly.title.toLowerCase().contains(query) ||
-              anomaly.description.toLowerCase().contains(query) ||
-              anomaly.location.toLowerCase().contains(query);
-        }
-
-        return true;
-      }).toList();
-    });
+    final provider = Provider.of<AnomalyProvider>(context, listen: false);
+    
+    // Update provider filters
+    provider.setStatusFilter(_selectedStatus);
+    provider.setCategoryFilter(_selectedCategory);
+    provider.setSearchQuery(_searchController.text);
   }
 
   void _showFilterSheet() {
@@ -73,8 +55,10 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
           setState(() {
             _selectedStatus = null;
             _selectedCategory = null;
+            _searchController.clear();
           });
-          _applyFilters();
+          final provider = Provider.of<AnomalyProvider>(context, listen: false);
+          provider.clearFilters();
         },
       ),
     );
@@ -95,11 +79,15 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const NewAnomalyScreen()),
           );
+          // Refresh anomalies list when returning
+          if (mounted) {
+            Provider.of<AnomalyProvider>(context, listen: false).loadAnomalies();
+          }
         },
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add_rounded, color: Colors.white),
@@ -172,10 +160,9 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
             ),
           ],
         ),
-        child: TextField(
+          child: TextField(
           controller: _searchController,
           onChanged: (value) {
-            setState(() => _searchQuery = value);
             _applyFilters();
           },
           style: GoogleFonts.poppins(fontSize: 15),
@@ -189,11 +176,10 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
               Icons.search_rounded,
               color: AppColors.textLight,
             ),
-            suffixIcon: _searchQuery.isNotEmpty
+            suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
                     onPressed: () {
                       _searchController.clear();
-                      setState(() => _searchQuery = '');
                       _applyFilters();
                     },
                     icon: const Icon(Icons.close_rounded, color: AppColors.textLight),
@@ -208,120 +194,155 @@ class _AnomaliesListScreenState extends State<AnomaliesListScreen> {
   }
 
   Widget _buildStatusTabs() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            _StatusChip(
-              label: 'Tous',
-              count: MockData.anomalies.length,
-              isSelected: _selectedStatus == null,
-              onTap: () {
-                setState(() => _selectedStatus = null);
-                _applyFilters();
-              },
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        // Get all anomalies (unfiltered) for counts
+        final allAnomalies = provider.allAnomalies;
+        final openCount = allAnomalies.where((a) => a.status == AnomalyStatus.ouvert).length;
+        final inProgressCount = allAnomalies.where((a) => a.status == AnomalyStatus.enCours).length;
+        final resolvedCount = allAnomalies.where((a) => a.status == AnomalyStatus.resolu).length;
+        
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                _StatusChip(
+                  label: 'Tous',
+                  count: allAnomalies.length,
+                  isSelected: _selectedStatus == null,
+                  onTap: () {
+                    setState(() => _selectedStatus = null);
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _StatusChip(
+                  label: 'Ouvert',
+                  count: openCount,
+                  isSelected: _selectedStatus == AnomalyStatus.ouvert,
+                  color: AppColors.statusOpen,
+                  onTap: () {
+                    setState(() => _selectedStatus = AnomalyStatus.ouvert);
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _StatusChip(
+                  label: 'En cours',
+                  count: inProgressCount,
+                  isSelected: _selectedStatus == AnomalyStatus.enCours,
+                  color: AppColors.statusInProgress,
+                  onTap: () {
+                    setState(() => _selectedStatus = AnomalyStatus.enCours);
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _StatusChip(
+                  label: 'Résolu',
+                  count: resolvedCount,
+                  isSelected: _selectedStatus == AnomalyStatus.resolu,
+                  color: AppColors.statusResolved,
+                  onTap: () {
+                    setState(() => _selectedStatus = AnomalyStatus.resolu);
+                    _applyFilters();
+                  },
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            _StatusChip(
-              label: 'Ouvert',
-              count: MockData.anomalies.where((a) => a.status == AnomalyStatus.ouvert).length,
-              isSelected: _selectedStatus == AnomalyStatus.ouvert,
-              color: AppColors.statusOpen,
-              onTap: () {
-                setState(() => _selectedStatus = AnomalyStatus.ouvert);
-                _applyFilters();
-              },
-            ),
-            const SizedBox(width: 8),
-            _StatusChip(
-              label: 'En cours',
-              count: MockData.anomalies.where((a) => a.status == AnomalyStatus.enCours).length,
-              isSelected: _selectedStatus == AnomalyStatus.enCours,
-              color: AppColors.statusInProgress,
-              onTap: () {
-                setState(() => _selectedStatus = AnomalyStatus.enCours);
-                _applyFilters();
-              },
-            ),
-            const SizedBox(width: 8),
-            _StatusChip(
-              label: 'Résolu',
-              count: MockData.anomalies.where((a) => a.status == AnomalyStatus.resolu).length,
-              isSelected: _selectedStatus == AnomalyStatus.resolu,
-              color: AppColors.statusResolved,
-              onTap: () {
-                setState(() => _selectedStatus = AnomalyStatus.resolu);
-                _applyFilters();
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildAnomaliesList() {
-    if (_filteredAnomalies.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 64,
-              color: AppColors.textLight.withOpacity(0.5),
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: AppColors.primary,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Aucune anomalie trouvée',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            if (_selectedStatus != null || _selectedCategory != null || _searchQuery.isNotEmpty)
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _selectedStatus = null;
-                    _selectedCategory = null;
-                    _searchQuery = '';
-                    _searchController.clear();
-                  });
-                  _applyFilters();
-                },
-                child: Text(
-                  'Réinitialiser les filtres',
+          );
+        }
+
+        final anomalies = provider.anomalies;
+        final hasFilters = _selectedStatus != null || 
+                          _selectedCategory != null || 
+                          _searchController.text.isNotEmpty;
+
+        if (anomalies.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  hasFilters ? Icons.search_off_rounded : Icons.inbox_rounded,
+                  size: 64,
+                  color: AppColors.textLight.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  hasFilters ? 'Aucune anomalie trouvée' : 'Aucune anomalie',
                   style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-              ),
-          ],
-        ),
-      );
-    }
+                if (hasFilters)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedStatus = null;
+                          _selectedCategory = null;
+                          _searchController.clear();
+                        });
+                        provider.clearFilters();
+                      },
+                      child: Text(
+                        'Réinitialiser les filtres',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _filteredAnomalies.length,
-      itemBuilder: (context, index) {
-        final anomaly = _filteredAnomalies[index];
-        return AnomalyCard(
-          anomaly: anomaly,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AnomalyDetailsScreen(anomaly: anomaly),
-              ),
-            );
+        return RefreshIndicator(
+          onRefresh: () async {
+            provider.loadAnomalies();
           },
+          color: AppColors.primary,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            itemCount: anomalies.length,
+            itemBuilder: (context, index) {
+              final anomaly = anomalies[index];
+              return AnomalyCard(
+                anomaly: anomaly,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AnomalyDetailsScreen(anomaly: anomaly),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         );
       },
     );

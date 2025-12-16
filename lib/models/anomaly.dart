@@ -3,10 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 enum AnomalyCategory {
   mecanique('Mécanique'),
   electrique('Électrique'),
+  vente('Vente'),
+  exploitation('Exploitation'),
   hse('HSE'),
-  infrastructure('Infrastructure'),
-  securite('Sécurité'),
-  environnement('Environnement');
+  bureauDeMethode('Bureau de méthode');
 
   final String label;
   const AnomalyCategory(this.label);

@@ -16,8 +16,10 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
+  List<Widget> get _screens => [
+    DashboardScreen(
+      onNavigateToAnomalies: () => setState(() => _currentIndex = 1),
+    ),
     const AnomaliesListScreen(),
     const AnalyticsDashboard(),
     const NotificationsScreen(),

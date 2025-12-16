@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/anomaly.dart';
 import '../services/firebase_anomaly_service.dart';
+import '../services/offline_storage_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/sync_service.dart';
 import '../data/mock_data.dart';
 
 class AnomalyProvider extends ChangeNotifier {
   final FirebaseAnomalyService _anomalyService = FirebaseAnomalyService();
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
+  final ConnectivityService _connectivity = ConnectivityService();
+  final SyncService _syncService = SyncService();
   
   List<Anomaly> _anomalies = [];
   List<Anomaly> _filteredAnomalies = [];
@@ -12,6 +18,8 @@ class AnomalyProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _useMockData = false; // Use real Firebase data
+  bool _isOnline = true;
+  int _pendingCount = 0;
 
   // Filters
   AnomalyStatus? _statusFilter;
@@ -19,9 +27,18 @@ class AnomalyProvider extends ChangeNotifier {
   AnomalyPriority? _priorityFilter;
   String _searchQuery = '';
 
-  List<Anomaly> get anomalies => _filteredAnomalies.isEmpty && _searchQuery.isEmpty 
-      ? _anomalies 
-      : _filteredAnomalies;
+  List<Anomaly> get anomalies {
+    // If there are active filters, return filtered list
+    if (_statusFilter != null || _categoryFilter != null || _priorityFilter != null || _searchQuery.isNotEmpty) {
+      return _filteredAnomalies;
+    }
+    // Otherwise return all anomalies
+    return _anomalies;
+  }
+  
+  // Get all anomalies without filters (for counts, etc.)
+  List<Anomaly> get allAnomalies => _anomalies;
+  
   Anomaly? get selectedAnomaly => _selectedAnomaly;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -30,8 +47,33 @@ class AnomalyProvider extends ChangeNotifier {
   AnomalyPriority? get priorityFilter => _priorityFilter;
   String get searchQuery => _searchQuery;
 
+  bool get isOnline => _isOnline;
+  int get pendingCount => _pendingCount;
+
   AnomalyProvider() {
     loadAnomalies();
+    _initConnectivity();
+    _syncService.startAutoSync();
+    _updatePendingCount();
+  }
+
+  void _initConnectivity() {
+    _connectivity.connectionStream.listen((isConnected) {
+      _isOnline = isConnected;
+      notifyListeners();
+      if (isConnected) {
+        _syncService.syncPendingAnomalies().then((_) => _updatePendingCount());
+      }
+    });
+    _connectivity.checkConnection().then((connected) {
+      _isOnline = connected;
+      notifyListeners();
+    });
+  }
+
+  Future<void> _updatePendingCount() async {
+    _pendingCount = await _offlineStorage.getPendingCount();
+    notifyListeners();
   }
 
   void loadAnomalies() {
@@ -120,23 +162,50 @@ class AnomalyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> createAnomaly(Anomaly anomaly) async {
+  Future<void> createAnomaly(Anomaly anomaly, {String? localImagePath}) async {
     _setLoading(true);
     _clearError();
 
     try {
-      if (_useMockData) {
-        _anomalies.insert(0, anomaly);
-        _applyFilters();
+      final isConnected = await _connectivity.checkConnection();
+      
+      if (isConnected) {
+        // Online: Save directly to Firebase
+        if (_useMockData) {
+          _anomalies.insert(0, anomaly);
+          _applyFilters();
+        } else {
+          await _anomalyService.createAnomaly(anomaly);
+        }
       } else {
-        await _anomalyService.createAnomaly(anomaly);
+        // Offline: Save locally
+        await _offlineStorage.saveAnomalyLocally(
+          anomaly: anomaly,
+          localImagePath: localImagePath,
+        );
+        await _updatePendingCount();
       }
       _setLoading(false);
     } catch (e) {
-      _setError(e.toString());
+      // If Firebase fails, save locally as backup
+      try {
+        await _offlineStorage.saveAnomalyLocally(
+          anomaly: anomaly,
+          localImagePath: localImagePath,
+        );
+        await _updatePendingCount();
+      } catch (offlineError) {
+        _setError(e.toString());
+      }
       _setLoading(false);
     }
     notifyListeners();
+  }
+
+  Future<void> syncPendingAnomalies() async {
+    await _syncService.syncPendingAnomalies();
+    await _updatePendingCount();
+    loadAnomalies(); // Reload to show synced anomalies
   }
 
   Future<void> updateAnomaly(String id, Anomaly updatedAnomaly) async {

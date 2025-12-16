@@ -9,10 +9,18 @@ import '../../models/anomaly.dart';
 import '../../providers/anomaly_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firebase_storage_service.dart';
+import '../../services/offline_storage_service.dart';
 import '../../theme/app_theme.dart';
 
 class NewAnomalyScreen extends StatefulWidget {
-  const NewAnomalyScreen({super.key});
+  final Anomaly? draftAnomaly;
+  final File? draftImagePath;
+
+  const NewAnomalyScreen({
+    super.key,
+    this.draftAnomaly,
+    this.draftImagePath,
+  });
 
   @override
   State<NewAnomalyScreen> createState() => _NewAnomalyScreenState();
@@ -25,6 +33,7 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
   final _locationController = TextEditingController();
   final _imagePicker = ImagePicker();
   final _storageService = FirebaseStorageService();
+  final _offlineStorage = OfflineStorageService();
   
   DateTime _selectedDate = DateTime.now();
   AnomalyPriority _selectedPriority = AnomalyPriority.medium;
@@ -32,15 +41,38 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
   bool _isLoading = false;
   File? _selectedImage;
   String _uploadStatus = '';
+  String? _draftId;
 
   final List<String> _departments = [
-    'Maintenance',
-    'Électricité',
+    'Mécanique',
+    'Électrique',
+    'Vente',
+    'Exploitation',
     'HSE',
-    'Infrastructure',
-    'Sécurité',
-    'Environnement',
+    'Bureau de méthode',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDraftData();
+  }
+
+  void _loadDraftData() {
+    if (widget.draftAnomaly != null) {
+      final draft = widget.draftAnomaly!;
+      _titleController.text = draft.title;
+      _descriptionController.text = draft.description;
+      _locationController.text = draft.location;
+      _selectedDate = draft.date;
+      _selectedPriority = draft.priority;
+      _selectedDepartment = draft.department;
+      _draftId = draft.id;
+      if (widget.draftImagePath != null) {
+        _selectedImage = widget.draftImagePath;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -173,25 +205,105 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
   }
 
   Future<void> _saveDraft() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.save_rounded, color: Colors.white),
-            const SizedBox(width: 12),
-            Text(
-              'Brouillon enregistré',
-              style: GoogleFonts.poppins(color: Colors.white),
-            ),
-          ],
+    // Validate required fields
+    if (_titleController.text.trim().isEmpty || 
+        _descriptionController.text.trim().isEmpty ||
+        _locationController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning_rounded, color: Colors.white),
+              const SizedBox(width: 12),
+              Text(
+                'Veuillez remplir au moins le titre, la description et la localisation',
+                style: GoogleFonts.poppins(color: Colors.white),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+      );
+      return;
+    }
+
+    try {
+      // Get current user info
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.appUser;
+      final createdBy = currentUser?.name ?? authProvider.firebaseUser?.email ?? 'Utilisateur';
+
+      // Use existing draft ID or create new one
+      final draftId = _draftId ?? const Uuid().v4();
+      _draftId = draftId;
+
+      // Get category based on department
+      AnomalyCategory category = _getCategoryFromDepartment(_selectedDepartment);
+
+      // Create draft anomaly
+      final draftAnomaly = Anomaly(
+        id: draftId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        date: _selectedDate,
+        location: _locationController.text.trim(),
+        category: category,
+        priority: _selectedPriority,
+        status: AnomalyStatus.ouvert,
+        createdBy: createdBy,
+        createdAt: _draftId == null ? DateTime.now() : DateTime.now(),
+        department: _selectedDepartment,
+      );
+
+      // Save draft locally
+      final localImagePath = _selectedImage?.path;
+      await _offlineStorage.saveDraft(
+        anomaly: draftAnomaly,
+        localImagePath: localImagePath,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.save_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'Brouillon enregistré',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'Erreur lors de l\'enregistrement: $e',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -230,16 +342,24 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
       final currentUser = authProvider.appUser;
       final createdBy = currentUser?.name ?? authProvider.firebaseUser?.email ?? 'Utilisateur';
 
-      // Upload image if selected
+      // Upload image if selected and online
       String? photoUrl;
-      if (_selectedImage != null) {
+      final anomalyProvider = Provider.of<AnomalyProvider>(context, listen: false);
+      final isOnline = anomalyProvider.isOnline;
+      
+      if (_selectedImage != null && isOnline) {
         setState(() => _uploadStatus = 'Upload de l\'image...');
         
-        final xFile = XFile(_selectedImage!.path);
-        photoUrl = await _storageService.uploadImage(xFile, folder: 'anomalies');
+        try {
+          final xFile = XFile(_selectedImage!.path);
+          photoUrl = await _storageService.uploadImage(xFile, folder: 'anomalies');
+        } catch (e) {
+          // If upload fails, will save image path locally
+          print('Image upload failed: $e');
+        }
       }
 
-      setState(() => _uploadStatus = 'Création de l\'anomalie...');
+      setState(() => _uploadStatus = isOnline ? 'Création de l\'anomalie...' : 'Enregistrement local...');
 
       // Get category based on department
       AnomalyCategory category = _getCategoryFromDepartment(_selectedDepartment);
@@ -260,32 +380,52 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
         photoUrl: photoUrl,
       );
 
-      // Save to Firebase using provider
-      final anomalyProvider = Provider.of<AnomalyProvider>(context, listen: false);
-      await anomalyProvider.createAnomaly(anomaly);
+      // Save to Firebase or locally (offline) using provider
+      final localImagePath = _selectedImage?.path;
+      await anomalyProvider.createAnomaly(anomaly, localImagePath: localImagePath);
+
+      // Delete draft if it was loaded from a draft
+      if (_draftId != null) {
+        try {
+          await _offlineStorage.deleteDraft(_draftId!);
+        } catch (e) {
+          // Ignore errors when deleting draft
+          print('Error deleting draft: $e');
+        }
+      }
 
       if (mounted) {
         setState(() => _isLoading = false);
+        
+        final isOnline = anomalyProvider.isOnline;
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                Icon(
+                  isOnline ? Icons.check_circle_rounded : Icons.cloud_off_rounded,
+                  color: Colors.white,
+                ),
                 const SizedBox(width: 12),
-                Text(
-                  'Anomalie créée avec succès',
-                  style: GoogleFonts.poppins(color: Colors.white),
+                Expanded(
+                  child: Text(
+                    isOnline 
+                      ? 'Anomalie créée avec succès'
+                      : 'Anomalie enregistrée localement. Elle sera synchronisée automatiquement.',
+                    style: GoogleFonts.poppins(color: Colors.white),
+                  ),
                 ),
               ],
             ),
-            backgroundColor: AppColors.success,
+            backgroundColor: isOnline ? AppColors.success : AppColors.warning,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: isOnline ? 2 : 4),
           ),
         );
         
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Return true to indicate draft was used
       }
     } catch (e) {
       if (mounted) {
@@ -355,10 +495,6 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Photo section
-              _buildPhotoSection(),
-              const SizedBox(height: 24),
-              
               // Title
               _buildInputLabel('Titre *'),
               _buildTextField(
@@ -416,6 +552,11 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
               // Priority
               _buildInputLabel('Priorité'),
               _buildPrioritySelector(),
+              const SizedBox(height: 24),
+              
+              // Photo section
+              _buildInputLabel('Photo'),
+              _buildPhotoSection(),
               const SizedBox(height: 100),
             ],
           ),
@@ -553,39 +694,34 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
                   ),
                 ],
               )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      shape: BoxShape.circle,
+            : Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add_a_photo_rounded,
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.add_a_photo_rounded,
-                      size: 32,
-                      color: AppColors.primary,
+                    const SizedBox(height: 12),
+                    Text(
+                      'Ajouter une photo',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Ajouter une photo',
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Appuyez pour prendre ou choisir une photo',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: AppColors.textLight,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
       ),
     );
@@ -794,18 +930,18 @@ class _NewAnomalyScreenState extends State<NewAnomalyScreen> {
 
   AnomalyCategory _getCategoryFromDepartment(String? department) {
     switch (department) {
-      case 'Maintenance':
+      case 'Mécanique':
         return AnomalyCategory.mecanique;
-      case 'Électricité':
+      case 'Électrique':
         return AnomalyCategory.electrique;
+      case 'Vente':
+        return AnomalyCategory.vente;
+      case 'Exploitation':
+        return AnomalyCategory.exploitation;
       case 'HSE':
         return AnomalyCategory.hse;
-      case 'Infrastructure':
-        return AnomalyCategory.infrastructure;
-      case 'Sécurité':
-        return AnomalyCategory.securite;
-      case 'Environnement':
-        return AnomalyCategory.environnement;
+      case 'Bureau de méthode':
+        return AnomalyCategory.bureauDeMethode;
       default:
         return AnomalyCategory.mecanique;
     }

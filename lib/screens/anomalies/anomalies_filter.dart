@@ -122,9 +122,9 @@ class _AnomaliesFilterSheetState extends State<AnomaliesFilterSheet> {
                   }).toList(),
                 ),
                 const SizedBox(height: 24),
-                // Category filter
+                // Department filter
                 Text(
-                  'Catégorie',
+                  'Département',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -270,14 +270,14 @@ class _AnomaliesFilterSheetState extends State<AnomaliesFilterSheet> {
         return Icons.build_rounded;
       case AnomalyCategory.electrique:
         return Icons.electric_bolt_rounded;
+      case AnomalyCategory.vente:
+        return Icons.shopping_cart_rounded;
+      case AnomalyCategory.exploitation:
+        return Icons.engineering_rounded;
       case AnomalyCategory.hse:
         return Icons.health_and_safety_rounded;
-      case AnomalyCategory.infrastructure:
-        return Icons.foundation_rounded;
-      case AnomalyCategory.securite:
-        return Icons.security_rounded;
-      case AnomalyCategory.environnement:
-        return Icons.eco_rounded;
+      case AnomalyCategory.bureauDeMethode:
+        return Icons.assignment_rounded;
     }
   }
 }
