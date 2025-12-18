@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../data/mock_data.dart';
+import 'package:provider/provider.dart';
 import '../../models/notification.dart';
+import '../../services/notification_service.dart';
+import '../../providers/auth_provider.dart' as app_auth;
 import '../../theme/app_theme.dart';
+import '../anomalies/anomaly_details.dart';
+import '../../services/firebase_anomaly_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -13,62 +17,119 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  List<AppNotification> _notifications = [];
+  final NotificationService _notificationService = NotificationService();
+  final FirebaseAnomalyService _anomalyService = FirebaseAnomalyService();
   bool _showUnreadOnly = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _notifications = MockData.notifications;
-  }
+  void _markAllAsRead() async {
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final userId = authProvider.firebaseUser?.uid;
+    
+    if (userId == null) return;
 
-  void _markAllAsRead() {
-    setState(() {
-      _notifications = _notifications
-          .map((n) => n.copyWith(isRead: true))
-          .toList();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_rounded, color: Colors.white),
-            const SizedBox(width: 12),
-            Text(
-              'Toutes les notifications marquées comme lues',
-              style: GoogleFonts.poppins(color: Colors.white),
+    try {
+      await _notificationService.markAllAsRead(userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'Toutes les notifications marquées comme lues',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+              ],
             ),
-          ],
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Erreur: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayedNotifications = _showUnreadOnly
-        ? _notifications.where((n) => !n.isRead).toList()
-        : _notifications;
-    final unreadCount = _notifications.where((n) => !n.isRead).length;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(unreadCount),
-            _buildFilterTabs(),
-            Expanded(
-              child: displayedNotifications.isEmpty
-                  ? _buildEmptyState()
-                  : _buildNotificationsList(displayedNotifications),
+    return Consumer<app_auth.AuthProvider>(
+      builder: (context, authProvider, child) {
+        final userId = authProvider.firebaseUser?.uid;
+        
+        if (userId == null) {
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: Text(
+                'Veuillez vous connecter',
+                style: GoogleFonts.poppins(),
+              ),
             ),
-          ],
-        ),
-      ),
+          );
+        }
+
+        return StreamBuilder<List<AppNotification>>(
+          stream: _notificationService.getNotificationsStream(userId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Scaffold(
+                backgroundColor: AppColors.background,
+                body: const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return Scaffold(
+                backgroundColor: AppColors.background,
+                body: Center(
+                  child: Text(
+                    'Erreur: ${snapshot.error}',
+                    style: GoogleFonts.poppins(color: AppColors.error),
+                  ),
+                ),
+              );
+            }
+
+            final allNotifications = snapshot.data ?? [];
+            final displayedNotifications = _showUnreadOnly
+                ? allNotifications.where((n) => !n.isRead).toList()
+                : allNotifications;
+            final unreadCount = allNotifications.where((n) => !n.isRead).length;
+
+            return Scaffold(
+              backgroundColor: AppColors.background,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(unreadCount),
+                    _buildFilterTabs(),
+                    Expanded(
+                      child: displayedNotifications.isEmpty
+                          ? _buildEmptyState()
+                          : _buildNotificationsList(displayedNotifications),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -209,19 +270,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             ...items.map((notification) => _NotificationCard(
               notification: notification,
-              onTap: () {
-                setState(() {
-                  final idx = _notifications.indexOf(notification);
-                  if (idx != -1) {
-                    _notifications[idx] = notification.copyWith(isRead: true);
+              onTap: () async {
+                // Mark as read
+                if (!notification.isRead) {
+                  await _notificationService.markAsRead(notification.id);
+                }
+                
+                // Navigate to anomaly details if anomalyId exists
+                if (notification.anomalyId != null) {
+                  try {
+                    final anomaly = await _anomalyService.getAnomaly(notification.anomalyId!);
+                    if (anomaly != null && mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AnomalyDetailsScreen(anomaly: anomaly),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Erreur lors du chargement de l\'anomalie: $e',
+                            style: GoogleFonts.poppins(),
+                          ),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   }
-                });
-                // TODO: Navigate to anomaly details
+                }
               },
-              onDismiss: () {
-                setState(() {
-                  _notifications.remove(notification);
-                });
+              onDismiss: () async {
+                try {
+                  await _notificationService.deleteNotification(notification.id);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Erreur lors de la suppression: $e',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                }
               },
             )),
           ],

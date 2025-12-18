@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../data/mock_data.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/department_card.dart';
 import '../../widgets/kpi_card.dart';
+import '../../providers/anomaly_provider.dart';
 import 'department_analytics.dart';
 
 class AnalyticsDashboard extends StatelessWidget {
@@ -57,406 +58,448 @@ class AnalyticsDashboard extends StatelessWidget {
   }
 
   Widget _buildOverviewStats() {
-    final stats = MockData.stats;
+    return Consumer<AnomalyProvider>(
+      builder: (context, anomalyProvider, child) {
+        final total = anomalyProvider.totalAnomalies;
+        final resolved = anomalyProvider.resolvedAnomalies;
+        final open = anomalyProvider.openAnomalies;
+        final inProgress = anomalyProvider.inProgressAnomalies;
+        final resolutionRate = anomalyProvider.resolutionRate;
     
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Vue d\'ensemble',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Total Anomalies',
-                  value: stats.totalAnomalies.toString(),
-                  icon: Icons.folder_rounded,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Taux de résolution',
-                  value: '${stats.resolutionRate.toStringAsFixed(0)}%',
-                  icon: Icons.trending_up_rounded,
-                  color: AppColors.success,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: KPICardSmall(
-                  title: 'Ouvertes',
-                  value: stats.openAnomalies.toString(),
-                  icon: Icons.error_outline_rounded,
-                  color: AppColors.statusOpen,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: KPICardSmall(
-                  title: 'En cours',
-                  value: stats.inProgressAnomalies.toString(),
-                  icon: Icons.pending_rounded,
-                  color: AppColors.statusInProgress,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: KPICardSmall(
-                  title: 'Résolues',
-                  value: stats.resolvedAnomalies.toString(),
-                  icon: Icons.check_circle_outline_rounded,
-                  color: AppColors.statusResolved,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrendChart() {
-    final monthlyData = MockData.monthlyData;
-    
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Total vs Résolues',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '6 derniers mois',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _LegendItem(color: AppColors.chartBlue, label: 'Total'),
-                const SizedBox(width: 20),
-                _LegendItem(color: AppColors.chartGreen, label: 'Résolues'),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 30,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (_) => AppColors.textPrimary,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        return BarTooltipItem(
-                          rod.toY.toInt().toString(),
-                          GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          if (value.toInt() < monthlyData.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                monthlyData[value.toInt()].month,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            );
-                          }
-                          return const Text('');
-                        },
-                        reservedSize: 30,
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toInt().toString(),
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: AppColors.textLight,
-                            ),
-                          );
-                        },
-                        reservedSize: 30,
-                        interval: 10,
-                      ),
-                    ),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 10,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: AppColors.border,
-                        strokeWidth: 1,
-                      );
-                    },
-                  ),
-                  borderData: FlBorderData(show: false),
-                  barGroups: monthlyData.asMap().entries.map((entry) {
-                    return BarChartGroupData(
-                      x: entry.key,
-                      barRods: [
-                        BarChartRodData(
-                          toY: entry.value.total.toDouble(),
-                          color: AppColors.chartBlue,
-                          width: 12,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        ),
-                        BarChartRodData(
-                          toY: entry.value.resolved.toDouble(),
-                          color: AppColors.chartGreen,
-                          width: 12,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPriorityChart() {
-    final stats = MockData.stats;
-    final total = stats.highPriority + stats.mediumPriority + stats.lowPriority;
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Répartition par priorité',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                SizedBox(
-                  width: 150,
-                  height: 150,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 40,
-                      sections: [
-                        PieChartSectionData(
-                          value: stats.highPriority.toDouble(),
-                          color: AppColors.highPriority,
-                          title: '${((stats.highPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          radius: 35,
-                        ),
-                        PieChartSectionData(
-                          value: stats.mediumPriority.toDouble(),
-                          color: AppColors.mediumPriority,
-                          title: '${((stats.mediumPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          radius: 35,
-                        ),
-                        PieChartSectionData(
-                          value: stats.lowPriority.toDouble(),
-                          color: AppColors.lowPriority,
-                          title: '${((stats.lowPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          radius: 35,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _PriorityLegendItem(
-                        color: AppColors.highPriority,
-                        label: 'Haute',
-                        count: stats.highPriority,
-                      ),
-                      const SizedBox(height: 12),
-                      _PriorityLegendItem(
-                        color: AppColors.mediumPriority,
-                        label: 'Moyenne',
-                        count: stats.mediumPriority,
-                      ),
-                      const SizedBox(height: 12),
-                      _PriorityLegendItem(
-                        color: AppColors.lowPriority,
-                        label: 'Basse',
-                        count: stats.lowPriority,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDepartmentSection(BuildContext context) {
-    final departments = MockData.departments;
-    
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Analyse par département',
+                'Vue d\'ensemble',
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
                 ),
               ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DepartmentAnalyticsScreen(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Total Anomalies',
+                      value: total.toString(),
+                      icon: Icons.folder_rounded,
+                      color: AppColors.primary,
                     ),
-                  );
-                },
-                child: Text(
-                  'Voir tout',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Taux de résolution',
+                      value: '${resolutionRate.toStringAsFixed(0)}%',
+                      icon: Icons.trending_up_rounded,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'Ouvertes',
+                      value: open.toString(),
+                      icon: Icons.error_outline_rounded,
+                      color: AppColors.statusOpen,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'En cours',
+                      value: inProgress.toString(),
+                      icon: Icons.pending_rounded,
+                      color: AppColors.statusInProgress,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'Résolues',
+                      value: resolved.toString(),
+                      icon: Icons.check_circle_outline_rounded,
+                      color: AppColors.statusResolved,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          ...departments.take(3).map((dept) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: DepartmentCardCompact(
-              department: dept,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DepartmentAnalyticsScreen(),
-                  ),
-                );
-              },
+        );
+      },
+    );
+  }
+
+  Widget _buildTrendChart() {
+    return Consumer<AnomalyProvider>(
+      builder: (context, anomalyProvider, child) {
+        final monthlyData = anomalyProvider.monthlyAnalytics;
+        
+        // Calculate max Y dynamically
+        final maxValue = monthlyData.isEmpty 
+            ? 10.0 
+            : monthlyData.map((d) => d.total > d.resolved ? d.total : d.resolved).reduce((a, b) => a > b ? a : b).toDouble();
+        final maxY = (maxValue * 1.2).ceilToDouble(); // Add 20% padding
+    
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
             ),
-          )),
-        ],
-      ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total vs Résolues',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '6 derniers mois',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _LegendItem(color: AppColors.chartBlue, label: 'Total'),
+                    const SizedBox(width: 20),
+                    _LegendItem(color: AppColors.chartGreen, label: 'Résolues'),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 200,
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => AppColors.textPrimary,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            return BarTooltipItem(
+                              rod.toY.toInt().toString(),
+                              GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              if (value.toInt() < monthlyData.length) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    monthlyData[value.toInt()].month,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              }
+                              return const Text('');
+                            },
+                            reservedSize: 30,
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                value.toInt().toString(),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: AppColors.textLight,
+                                ),
+                              );
+                            },
+                            reservedSize: 30,
+                            interval: 10,
+                          ),
+                        ),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: 10,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: AppColors.border,
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      borderData: FlBorderData(show: false),
+                      barGroups: monthlyData.asMap().entries.map((entry) {
+                        return BarChartGroupData(
+                          x: entry.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: entry.value.total.toDouble(),
+                              color: AppColors.chartBlue,
+                              width: 12,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                            BarChartRodData(
+                              toY: entry.value.resolved.toDouble(),
+                              color: AppColors.chartGreen,
+                              width: 12,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPriorityChart() {
+    return Consumer<AnomalyProvider>(
+      builder: (context, anomalyProvider, child) {
+        final highPriority = anomalyProvider.highPriorityAnomalies;
+        final mediumPriority = anomalyProvider.mediumPriorityAnomalies;
+        final lowPriority = anomalyProvider.lowPriorityAnomalies;
+        final total = highPriority + mediumPriority + lowPriority;
+    
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Répartition par priorité',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 150,
+                      height: 150,
+                      child: PieChart(
+                        PieChartData(
+                          sectionsSpace: 3,
+                          centerSpaceRadius: 40,
+                          sections: [
+                            PieChartSectionData(
+                              value: highPriority.toDouble(),
+                              color: AppColors.highPriority,
+                              title: total > 0 ? '${((highPriority / total) * 100).toStringAsFixed(0)}%' : '0%',
+                              titleStyle: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              radius: 35,
+                            ),
+                            PieChartSectionData(
+                              value: mediumPriority.toDouble(),
+                              color: AppColors.mediumPriority,
+                              title: total > 0 ? '${((mediumPriority / total) * 100).toStringAsFixed(0)}%' : '0%',
+                              titleStyle: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              radius: 35,
+                            ),
+                            PieChartSectionData(
+                              value: lowPriority.toDouble(),
+                              color: AppColors.lowPriority,
+                              title: total > 0 ? '${((lowPriority / total) * 100).toStringAsFixed(0)}%' : '0%',
+                              titleStyle: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              radius: 35,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PriorityLegendItem(
+                            color: AppColors.highPriority,
+                            label: 'Haute',
+                            count: highPriority,
+                          ),
+                          const SizedBox(height: 12),
+                          _PriorityLegendItem(
+                            color: AppColors.mediumPriority,
+                            label: 'Moyenne',
+                            count: mediumPriority,
+                          ),
+                          const SizedBox(height: 12),
+                          _PriorityLegendItem(
+                            color: AppColors.lowPriority,
+                            label: 'Basse',
+                            count: lowPriority,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDepartmentSection(BuildContext context) {
+    return Consumer<AnomalyProvider>(
+      builder: (context, anomalyProvider, child) {
+        final departments = anomalyProvider.departmentAnalytics;
+        
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Analyse par département',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DepartmentAnalyticsScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'Voir tout',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (departments.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Text(
+                      'Aucun département avec des anomalies',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ...departments.take(3).map((dept) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: DepartmentCardCompact(
+                    department: dept,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DepartmentAnalyticsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                )),
+            ],
+          ),
+        );
+      },
     );
   }
 }

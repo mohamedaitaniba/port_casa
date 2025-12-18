@@ -1,16 +1,53 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/anomaly.dart';
+import '../models/notification.dart';
 import '../services/firebase_anomaly_service.dart';
 import '../services/offline_storage_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/sync_service.dart';
+import '../services/notification_service.dart';
 import '../data/mock_data.dart';
+
+// Helper classes for analytics
+class MonthlyAnalyticsData {
+  final String month;
+  final int total;
+  final int resolved;
+
+  MonthlyAnalyticsData({
+    required this.month,
+    required this.total,
+    required this.resolved,
+  });
+}
+
+class DepartmentAnalytics {
+  final String name;
+  final int totalAnomalies;
+  final int resolvedAnomalies;
+  final int openAnomalies;
+  final int inProgressAnomalies;
+  final double resolutionRate;
+  final IconData icon;
+
+  DepartmentAnalytics({
+    required this.name,
+    required this.totalAnomalies,
+    required this.resolvedAnomalies,
+    required this.openAnomalies,
+    required this.inProgressAnomalies,
+    required this.resolutionRate,
+    required this.icon,
+  });
+}
 
 class AnomalyProvider extends ChangeNotifier {
   final FirebaseAnomalyService _anomalyService = FirebaseAnomalyService();
   final OfflineStorageService _offlineStorage = OfflineStorageService();
   final ConnectivityService _connectivity = ConnectivityService();
   final SyncService _syncService = SyncService();
+  final NotificationService _notificationService = NotificationService();
   
   List<Anomaly> _anomalies = [];
   List<Anomaly> _filteredAnomalies = [];
@@ -57,6 +94,12 @@ class AnomalyProvider extends ChangeNotifier {
     _updatePendingCount();
   }
 
+  @override
+  void dispose() {
+    _anomaliesSubscription?.cancel();
+    super.dispose();
+  }
+
   void _initConnectivity() {
     _connectivity.connectionStream.listen((isConnected) {
       _isOnline = isConnected;
@@ -76,13 +119,18 @@ class AnomalyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  StreamSubscription<List<Anomaly>>? _anomaliesSubscription;
+
   void loadAnomalies() {
     if (_useMockData) {
       _anomalies = MockData.anomalies;
       _applyFilters();
       notifyListeners();
     } else {
-      _anomalyService.getAnomaliesStream().listen((anomalies) {
+      // Cancel previous subscription if exists
+      _anomaliesSubscription?.cancel();
+      
+      _anomaliesSubscription = _anomalyService.getAnomaliesStream().listen((anomalies) {
         _anomalies = anomalies;
         _applyFilters();
         notifyListeners();
@@ -175,7 +223,44 @@ class AnomalyProvider extends ChangeNotifier {
           _anomalies.insert(0, anomaly);
           _applyFilters();
         } else {
-          await _anomalyService.createAnomaly(anomaly);
+          // Optimistic update: Add anomaly to local list immediately
+          final optimisticAnomaly = anomaly.copyWith(
+            id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+          );
+          _anomalies.insert(0, optimisticAnomaly);
+          _applyFilters();
+          notifyListeners(); // Update UI immediately
+          
+          try {
+            final anomalyId = await _anomalyService.createAnomaly(anomaly);
+            
+            // Replace temporary anomaly with real one from Firestore
+            // The Stream will update it automatically, but we can also update it manually
+            final index = _anomalies.indexWhere((a) => a.id == optimisticAnomaly.id);
+            if (index != -1) {
+              final realAnomaly = anomaly.copyWith(id: anomalyId);
+              _anomalies[index] = realAnomaly;
+              _applyFilters();
+              notifyListeners();
+            }
+            
+            // Notify all users about the new anomaly (async, don't wait)
+            _notificationService.notifyAllUsers(
+              title: 'Nouvelle anomalie signalée',
+              description: '${anomaly.createdBy} a signalé une nouvelle anomalie: ${anomaly.title}',
+              type: NotificationType.newAnomaly,
+              anomalyId: anomalyId,
+            ).catchError((e) {
+              print('Error creating notifications: $e');
+              // Don't fail the anomaly creation if notifications fail
+            });
+          } catch (e) {
+            // Remove optimistic update on error
+            _anomalies.removeWhere((a) => a.id == optimisticAnomaly.id);
+            _applyFilters();
+            notifyListeners();
+            rethrow; // Re-throw to be caught by outer catch
+          }
         }
       } else {
         // Offline: Save locally
@@ -242,7 +327,56 @@ class AnomalyProvider extends ChangeNotifier {
           _applyFilters();
         }
       } else {
+        // Get the anomaly to get its title
+        final anomaly = _anomalies.firstWhere(
+          (a) => a.id == id,
+          orElse: () => _anomalies.isNotEmpty ? _anomalies.first : Anomaly(
+            id: id,
+            title: 'Anomalie',
+            description: '',
+            date: DateTime.now(),
+            location: '',
+            category: AnomalyCategory.mecanique,
+            priority: AnomalyPriority.medium,
+            status: AnomalyStatus.ouvert,
+            createdBy: '',
+            createdAt: DateTime.now(),
+          ),
+        );
+        final oldStatus = anomaly.status;
+        
         await _anomalyService.updateAnomalyStatus(id, status);
+        
+        // Notify all users about the status change
+        try {
+          String title;
+          String description;
+          NotificationType type;
+          
+          if (status == AnomalyStatus.resolu) {
+            title = 'Anomalie résolue';
+            description = 'L\'anomalie "${anomaly.title}" a été résolue';
+            type = NotificationType.resolved;
+          } else if (status == AnomalyStatus.enCours && oldStatus == AnomalyStatus.ouvert) {
+            title = 'Anomalie prise en charge';
+            description = 'L\'anomalie "${anomaly.title}" est maintenant en cours de traitement';
+            type = NotificationType.update;
+          } else {
+            title = 'Statut mis à jour';
+            description = 'Le statut de l\'anomalie "${anomaly.title}" a été modifié';
+            type = NotificationType.update;
+          }
+          
+          await _notificationService.notifyAllUsers(
+            title: title,
+            description: description,
+            type: type,
+            anomalyId: id,
+          );
+        } catch (e) {
+          print('Error creating notifications: $e');
+          // Don't fail the status update if notifications fail
+        }
       }
       _setLoading(false);
     } catch (e) {
@@ -286,6 +420,12 @@ class AnomalyProvider extends ChangeNotifier {
   int get highPriorityAnomalies =>
       _anomalies.where((a) => a.priority == AnomalyPriority.high).length;
 
+  int get mediumPriorityAnomalies =>
+      _anomalies.where((a) => a.priority == AnomalyPriority.medium).length;
+
+  int get lowPriorityAnomalies =>
+      _anomalies.where((a) => a.priority == AnomalyPriority.low).length;
+
   List<Anomaly> get highPriorityAlerts => _anomalies
       .where((a) => 
           a.priority == AnomalyPriority.high && 
@@ -296,6 +436,97 @@ class AnomalyProvider extends ChangeNotifier {
   double get resolutionRate => totalAnomalies > 0 
       ? (resolvedAnomalies / totalAnomalies) * 100 
       : 0;
+
+  // Monthly analytics data for trend chart (last 6 months)
+  List<MonthlyAnalyticsData> get monthlyAnalytics {
+    final now = DateTime.now();
+    final List<MonthlyAnalyticsData> monthlyData = [];
+
+    for (int i = 5; i >= 0; i--) {
+      final monthDate = DateTime(now.year, now.month - i, 1);
+      final nextMonth = DateTime(monthDate.year, monthDate.month + 1, 1);
+
+      final monthAnomalies = _anomalies.where((anomaly) {
+        return anomaly.createdAt.isAfter(monthDate.subtract(const Duration(days: 1))) &&
+               anomaly.createdAt.isBefore(nextMonth);
+      }).toList();
+
+      final resolved = monthAnomalies.where((a) => a.status == AnomalyStatus.resolu).length;
+
+      final monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+      monthlyData.add(MonthlyAnalyticsData(
+        month: monthNames[monthDate.month - 1],
+        total: monthAnomalies.length,
+        resolved: resolved,
+      ));
+    }
+
+    return monthlyData;
+  }
+
+  // Department analytics
+  List<DepartmentAnalytics> get departmentAnalytics {
+    final Map<String, List<Anomaly>> deptMap = {};
+
+    // Group anomalies by department
+    for (var anomaly in _anomalies) {
+      final dept = anomaly.department ?? 'Non assigné';
+      if (!deptMap.containsKey(dept)) {
+        deptMap[dept] = [];
+      }
+      deptMap[dept]!.add(anomaly);
+    }
+
+    return deptMap.entries.map((entry) {
+      final total = entry.value.length;
+      final resolved = entry.value.where((a) => a.status == AnomalyStatus.resolu).length;
+      final open = entry.value.where((a) => a.status == AnomalyStatus.ouvert).length;
+      final inProgress = entry.value.where((a) => a.status == AnomalyStatus.enCours).length;
+      final resolutionRate = total > 0 ? (resolved / total) * 100 : 0;
+
+      // Determine icon based on department name
+      IconData iconData;
+      switch (entry.key) {
+        case 'Mécanique': 
+        case 'Maintenance':
+          iconData = Icons.build_rounded; 
+          break;
+        case 'Électrique': 
+        case 'Électricité':
+          iconData = Icons.electric_bolt_rounded; 
+          break;
+        case 'HSE': 
+        case 'Sécurité':
+          iconData = Icons.health_and_safety_rounded; 
+          break;
+        case 'Exploitation':
+          iconData = Icons.engineering_rounded; 
+          break;
+        case 'Vente':
+          iconData = Icons.shopping_cart_rounded; 
+          break;
+        case 'Bureau de méthode':
+        case 'Infrastructure':
+          iconData = Icons.assignment_rounded; 
+          break;
+        case 'Environnement':
+          iconData = Icons.eco_rounded;
+          break;
+        default: 
+          iconData = Icons.folder_rounded;
+      }
+
+      return DepartmentAnalytics(
+        name: entry.key,
+        totalAnomalies: total,
+        resolvedAnomalies: resolved,
+        openAnomalies: open,
+        inProgressAnomalies: inProgress,
+        resolutionRate: resolutionRate.toDouble(),
+        icon: iconData,
+      );
+    }).toList();
+  }
 
   void _setLoading(bool value) {
     _isLoading = value;

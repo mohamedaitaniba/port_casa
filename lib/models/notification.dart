@@ -25,6 +25,7 @@ class AppNotification {
   final NotificationType type;
   final DateTime date;
   final bool isRead;
+  final String userId; // User who should receive this notification
   final String? anomalyId;
 
   AppNotification({
@@ -33,6 +34,7 @@ class AppNotification {
     required this.description,
     required this.type,
     required this.date,
+    required this.userId,
     this.isRead = false,
     this.anomalyId,
   });
@@ -45,6 +47,7 @@ class AppNotification {
       description: data['description'] ?? '',
       type: NotificationType.fromString(data['type'] ?? ''),
       date: (data['date'] as Timestamp).toDate(),
+      userId: data['userId'] ?? '',
       isRead: data['isRead'] ?? false,
       anomalyId: data['anomalyId'],
     );
@@ -56,6 +59,7 @@ class AppNotification {
       'description': description,
       'type': type.value,
       'date': Timestamp.fromDate(date),
+      'userId': userId,
       'isRead': isRead,
       'anomalyId': anomalyId,
     };
@@ -67,6 +71,7 @@ class AppNotification {
     String? description,
     NotificationType? type,
     DateTime? date,
+    String? userId,
     bool? isRead,
     String? anomalyId,
   }) {
@@ -76,6 +81,7 @@ class AppNotification {
       description: description ?? this.description,
       type: type ?? this.type,
       date: date ?? this.date,
+      userId: userId ?? this.userId,
       isRead: isRead ?? this.isRead,
       anomalyId: anomalyId ?? this.anomalyId,
     );

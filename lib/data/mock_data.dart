@@ -244,6 +244,7 @@ class MockData {
       description: 'Fuite hydraulique sur grue #12 - Priorité haute',
       type: NotificationType.newAnomaly,
       date: DateTime.now().subtract(const Duration(hours: 2)),
+      userId: 'mock_user_1',
       anomalyId: '1',
     ),
     AppNotification(
@@ -252,6 +253,7 @@ class MockData {
       description: 'Vous avez été assigné à: Défaillance éclairage zone B',
       type: NotificationType.assign,
       date: DateTime.now().subtract(const Duration(days: 1)),
+      userId: 'mock_user_1',
       anomalyId: '2',
     ),
     AppNotification(
@@ -260,6 +262,7 @@ class MockData {
       description: 'Non-conformité EPI secteur C a été marquée comme résolue',
       type: NotificationType.resolved,
       date: DateTime.now().subtract(const Duration(days: 2)),
+      userId: 'mock_user_1',
       anomalyId: '3',
       isRead: true,
     ),
@@ -269,6 +272,7 @@ class MockData {
       description: 'Caméra surveillance HS - Statut changé en "En cours"',
       type: NotificationType.update,
       date: DateTime.now().subtract(const Duration(days: 1)),
+      userId: 'mock_user_1',
       anomalyId: '5',
     ),
     AppNotification(
@@ -277,6 +281,7 @@ class MockData {
       description: 'Déversement huile moteur requiert attention immédiate',
       type: NotificationType.newAnomaly,
       date: DateTime.now().subtract(const Duration(hours: 5)),
+      userId: 'mock_user_1',
       anomalyId: '6',
     ),
   ];

@@ -10,12 +10,14 @@ class NotificationService {
     return _firestore
         .collection(_collection)
         .where('userId', isEqualTo: userId)
-        .orderBy('date', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final notifications = snapshot.docs
           .map((doc) => AppNotification.fromFirestore(doc))
           .toList();
+      // Sort by date descending on client side to avoid needing an index
+      notifications.sort((a, b) => b.date.compareTo(a.date));
+      return notifications;
     });
   }
 
@@ -23,13 +25,15 @@ class NotificationService {
   Stream<List<AppNotification>> getAllNotificationsStream() {
     return _firestore
         .collection(_collection)
-        .orderBy('date', descending: true)
         .limit(50)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final notifications = snapshot.docs
           .map((doc) => AppNotification.fromFirestore(doc))
           .toList();
+      // Sort by date descending on client side
+      notifications.sort((a, b) => b.date.compareTo(a.date));
+      return notifications;
     });
   }
 
@@ -49,6 +53,54 @@ class NotificationService {
       await _firestore.collection(_collection).add(notification.toFirestore());
     } catch (e) {
       throw Exception('Erreur lors de la création de la notification: $e');
+    }
+  }
+
+  // Create notification for all users
+  Future<void> notifyAllUsers({
+    required String title,
+    required String description,
+    required NotificationType type,
+    String? anomalyId,
+  }) async {
+    try {
+      // Get all users
+      final usersSnapshot = await _firestore.collection('users').get();
+      
+      if (usersSnapshot.docs.isEmpty) {
+        print('No users found to notify');
+        return;
+      }
+
+      print('Notifying ${usersSnapshot.docs.length} users');
+
+      // Create notification for each user
+      final batch = _firestore.batch();
+      final now = DateTime.now();
+
+      for (var userDoc in usersSnapshot.docs) {
+        final userId = userDoc.id;
+        final notificationRef = _firestore.collection(_collection).doc();
+        
+        final notificationData = {
+          'title': title,
+          'description': description,
+          'type': type.value,
+          'date': Timestamp.fromDate(now),
+          'userId': userId,
+          'isRead': false,
+          if (anomalyId != null) 'anomalyId': anomalyId,
+        };
+
+        batch.set(notificationRef, notificationData);
+      }
+
+      await batch.commit();
+      print('Notifications created successfully for all users');
+    } catch (e, stackTrace) {
+      print('Error notifying all users: $e');
+      print('Stack trace: $stackTrace');
+      throw Exception('Erreur lors de la création des notifications: $e');
     }
   }
 

@@ -2,16 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../models/anomaly.dart';
+import '../models/notification.dart';
 import 'offline_storage_service.dart';
 import 'firebase_storage_service.dart';
 import 'firebase_anomaly_service.dart';
 import 'connectivity_service.dart';
+import 'notification_service.dart';
 
 class SyncService {
   final OfflineStorageService _offlineStorage = OfflineStorageService();
   final FirebaseAnomalyService _firebaseService = FirebaseAnomalyService();
   final FirebaseStorageService _storageService = FirebaseStorageService();
   final ConnectivityService _connectivity = ConnectivityService();
+  final NotificationService _notificationService = NotificationService();
 
   bool _isSyncing = false;
   bool get isSyncing => _isSyncing;
@@ -67,9 +70,22 @@ class SyncService {
 
           // Create anomaly in Firebase
           final updatedAnomaly = anomaly.copyWith(photoUrl: photoUrl);
-          await _firebaseService.createAnomaly(updatedAnomaly);
+          final firebaseAnomalyId = await _firebaseService.createAnomaly(updatedAnomaly);
 
-          // Mark as synced
+          // Notify all users about the synced anomaly
+          try {
+            await _notificationService.notifyAllUsers(
+              title: 'Nouvelle anomalie signalée',
+              description: '${anomaly.createdBy} a signalé une nouvelle anomalie: ${anomaly.title}',
+              type: NotificationType.newAnomaly,
+              anomalyId: firebaseAnomalyId,
+            );
+          } catch (e) {
+            print('Error creating notifications for synced anomaly: $e');
+            // Don't fail the sync if notifications fail
+          }
+
+          // Mark as synced (use local anomalyId)
           await _offlineStorage.markAsSynced(anomalyId);
         } catch (e) {
           print('Error syncing anomaly ${item['id']}: $e');

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/mock_data.dart';
+import '../providers/anomaly_provider.dart';
 import '../theme/app_theme.dart';
 
 class DepartmentCard extends StatelessWidget {
-  final Department department;
+  final DepartmentAnalytics department;
   final VoidCallback? onTap;
 
   const DepartmentCard({
@@ -14,37 +14,28 @@ class DepartmentCard extends StatelessWidget {
   });
 
   IconData _getIcon() {
-    switch (department.icon) {
-      case 'build':
-        return Icons.build_rounded;
-      case 'electric_bolt':
-        return Icons.electric_bolt_rounded;
-      case 'health_and_safety':
-        return Icons.health_and_safety_rounded;
-      case 'foundation':
-        return Icons.foundation_rounded;
-      case 'security':
-        return Icons.security_rounded;
-      case 'eco':
-        return Icons.eco_rounded;
-      default:
-        return Icons.folder_rounded;
-    }
+    return department.icon;
   }
 
   Color _getDepartmentColor() {
-    switch (department.icon) {
-      case 'build':
+    switch (department.name) {
+      case 'Mécanique':
+      case 'Maintenance':
         return AppColors.chartBlue;
-      case 'electric_bolt':
+      case 'Électrique':
+      case 'Électricité':
         return AppColors.chartOrange;
-      case 'health_and_safety':
+      case 'HSE':
+      case 'Sécurité':
         return AppColors.chartGreen;
-      case 'foundation':
+      case 'Exploitation':
         return AppColors.chartPurple;
-      case 'security':
+      case 'Vente':
         return AppColors.chartRed;
-      case 'eco':
+      case 'Bureau de méthode':
+      case 'Infrastructure':
+        return AppColors.chartTeal;
+      case 'Environnement':
         return AppColors.chartTeal;
       default:
         return AppColors.primary;
@@ -226,7 +217,7 @@ class _StatItem extends StatelessWidget {
 }
 
 class DepartmentCardCompact extends StatelessWidget {
-  final Department department;
+  final DepartmentAnalytics department;
   final VoidCallback? onTap;
 
   const DepartmentCardCompact({
@@ -236,22 +227,7 @@ class DepartmentCardCompact extends StatelessWidget {
   });
 
   IconData _getIcon() {
-    switch (department.icon) {
-      case 'build':
-        return Icons.build_rounded;
-      case 'electric_bolt':
-        return Icons.electric_bolt_rounded;
-      case 'health_and_safety':
-        return Icons.health_and_safety_rounded;
-      case 'foundation':
-        return Icons.foundation_rounded;
-      case 'security':
-        return Icons.security_rounded;
-      case 'eco':
-        return Icons.eco_rounded;
-      default:
-        return Icons.folder_rounded;
-    }
+    return department.icon;
   }
 
   @override
