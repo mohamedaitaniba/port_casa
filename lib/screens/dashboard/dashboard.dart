@@ -180,62 +180,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
-                  // Connectivity & Sync Status - Always visible
-                  Container(
-                    margin: const EdgeInsets.only(right: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: !anomalyProvider.isOnline 
-                        ? AppColors.warning.withOpacity(0.1)
-                        : anomalyProvider.pendingCount > 0
-                          ? AppColors.info.withOpacity(0.1)
-                          : AppColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
+                  // Connectivity & Sync Status - Always visible, clickable if pending
+                  GestureDetector(
+                    onTap: anomalyProvider.pendingCount > 0 && anomalyProvider.isOnline
+                        ? () async {
+                            // Force manual sync
+                            await anomalyProvider.syncPendingAnomalies();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Synchronisation en cours...',
+                                        style: GoogleFonts.poppins(color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: AppColors.info,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        : null,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
                         color: !anomalyProvider.isOnline 
-                          ? AppColors.warning
+                          ? AppColors.warning.withOpacity(0.1)
                           : anomalyProvider.pendingCount > 0
-                            ? AppColors.info
-                            : AppColors.success,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          !anomalyProvider.isOnline 
-                            ? Icons.cloud_off_rounded
-                            : anomalyProvider.pendingCount > 0
-                              ? Icons.sync_rounded
-                              : Icons.cloud_done_rounded,
-                          size: 16,
+                            ? AppColors.info.withOpacity(0.1)
+                            : AppColors.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
                           color: !anomalyProvider.isOnline 
                             ? AppColors.warning
                             : anomalyProvider.pendingCount > 0
                               ? AppColors.info
                               : AppColors.success,
+                          width: 1.5,
                         ),
-                        const SizedBox(width: 6),
-                        if (anomalyProvider.pendingCount > 0)
-                          Text(
-                            '${anomalyProvider.pendingCount}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.info,
-                            ),
-                          )
-                        else if (anomalyProvider.isOnline)
-                          Text(
-                            'En ligne',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.success,
-                            ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            !anomalyProvider.isOnline 
+                              ? Icons.cloud_off_rounded
+                              : anomalyProvider.pendingCount > 0
+                                ? Icons.sync_rounded
+                                : Icons.cloud_done_rounded,
+                            size: 16,
+                            color: !anomalyProvider.isOnline 
+                              ? AppColors.warning
+                              : anomalyProvider.pendingCount > 0
+                                ? AppColors.info
+                                : AppColors.success,
                           ),
-                      ],
+                          const SizedBox(width: 6),
+                          if (anomalyProvider.pendingCount > 0)
+                            Text(
+                              '${anomalyProvider.pendingCount}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.info,
+                              ),
+                            )
+                          else if (anomalyProvider.isOnline)
+                            Text(
+                              'En ligne',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.success,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   GestureDetector(

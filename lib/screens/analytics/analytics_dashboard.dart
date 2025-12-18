@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../data/mock_data.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/department_card.dart';
 import '../../widgets/kpi_card.dart';
+import '../../providers/anomaly_provider.dart';
 import 'department_analytics.dart';
 
 class AnalyticsDashboard extends StatelessWidget {
@@ -57,83 +58,91 @@ class AnalyticsDashboard extends StatelessWidget {
   }
 
   Widget _buildOverviewStats() {
-    final stats = MockData.stats;
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Vue d\'ensemble',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Total Anomalies',
-                  value: stats.totalAnomalies.toString(),
-                  icon: Icons.folder_rounded,
-                  color: AppColors.primary,
+              Text(
+                'Vue d\'ensemble',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Taux de résolution',
-                  value: '${stats.resolutionRate.toStringAsFixed(0)}%',
-                  icon: Icons.trending_up_rounded,
-                  color: AppColors.success,
-                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Total Anomalies',
+                      value: provider.totalAnomalies.toString(),
+                      icon: Icons.folder_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      label: 'Taux de résolution',
+                      value: '${provider.resolutionRate.toStringAsFixed(0)}%',
+                      icon: Icons.trending_up_rounded,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'Ouvertes',
+                      value: provider.openAnomalies.toString(),
+                      icon: Icons.error_outline_rounded,
+                      color: AppColors.statusOpen,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'En cours',
+                      value: provider.inProgressAnomalies.toString(),
+                      icon: Icons.pending_rounded,
+                      color: AppColors.statusInProgress,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: KPICardSmall(
+                      title: 'Résolues',
+                      value: provider.resolvedAnomalies.toString(),
+                      icon: Icons.check_circle_outline_rounded,
+                      color: AppColors.statusResolved,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: KPICardSmall(
-                  title: 'Ouvertes',
-                  value: stats.openAnomalies.toString(),
-                  icon: Icons.error_outline_rounded,
-                  color: AppColors.statusOpen,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: KPICardSmall(
-                  title: 'En cours',
-                  value: stats.inProgressAnomalies.toString(),
-                  icon: Icons.pending_rounded,
-                  color: AppColors.statusInProgress,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: KPICardSmall(
-                  title: 'Résolues',
-                  value: stats.resolvedAnomalies.toString(),
-                  icon: Icons.check_circle_outline_rounded,
-                  color: AppColors.statusResolved,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildTrendChart() {
-    final monthlyData = MockData.monthlyData;
-    
-    return Padding(
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        final monthlyData = provider.monthlyAnalytics;
+        final maxValue = monthlyData.isEmpty 
+            ? 10.0 
+            : monthlyData.map((e) => e.total > e.resolved ? e.total : e.resolved).reduce((a, b) => a > b ? a : b).toDouble();
+        final maxY = maxValue > 0 ? (maxValue * 1.2).ceil().toDouble() : 30.0;
+        
+        return Padding(
       padding: const EdgeInsets.all(20),
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -189,10 +198,31 @@ class AnalyticsDashboard extends StatelessWidget {
             const SizedBox(height: 24),
             SizedBox(
               height: 200,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 30,
+              child: monthlyData.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.bar_chart_rounded,
+                            size: 48,
+                            color: AppColors.textLight.withOpacity(0.5),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Aucune donnée disponible',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: maxY,
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
@@ -281,20 +311,65 @@ class AnalyticsDashboard extends StatelessWidget {
                       ],
                     );
                   }).toList(),
-                ),
-              ),
+                      ),
+                    ),
             ),
           ],
         ),
       ),
     );
+      },
+    );
   }
 
   Widget _buildPriorityChart() {
-    final stats = MockData.stats;
-    final total = stats.highPriority + stats.mediumPriority + stats.lowPriority;
-    
-    return Padding(
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        final highPriority = provider.highPriorityAnomalies;
+        final mediumPriority = provider.mediumPriorityAnomalies;
+        final lowPriority = provider.lowPriorityAnomalies;
+        final total = highPriority + mediumPriority + lowPriority;
+        
+        if (total == 0) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.pie_chart_rounded,
+                      size: 48,
+                      color: AppColors.textLight.withOpacity(0.5),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Aucune donnée disponible',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        
+        return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -331,39 +406,42 @@ class AnalyticsDashboard extends StatelessWidget {
                       sectionsSpace: 3,
                       centerSpaceRadius: 40,
                       sections: [
-                        PieChartSectionData(
-                          value: stats.highPriority.toDouble(),
-                          color: AppColors.highPriority,
-                          title: '${((stats.highPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        if (highPriority > 0)
+                          PieChartSectionData(
+                            value: highPriority.toDouble(),
+                            color: AppColors.highPriority,
+                            title: '${((highPriority / total) * 100).toStringAsFixed(0)}%',
+                            titleStyle: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            radius: 35,
                           ),
-                          radius: 35,
-                        ),
-                        PieChartSectionData(
-                          value: stats.mediumPriority.toDouble(),
-                          color: AppColors.mediumPriority,
-                          title: '${((stats.mediumPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        if (mediumPriority > 0)
+                          PieChartSectionData(
+                            value: mediumPriority.toDouble(),
+                            color: AppColors.mediumPriority,
+                            title: '${((mediumPriority / total) * 100).toStringAsFixed(0)}%',
+                            titleStyle: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            radius: 35,
                           ),
-                          radius: 35,
-                        ),
-                        PieChartSectionData(
-                          value: stats.lowPriority.toDouble(),
-                          color: AppColors.lowPriority,
-                          title: '${((stats.lowPriority / total) * 100).toStringAsFixed(0)}%',
-                          titleStyle: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        if (lowPriority > 0)
+                          PieChartSectionData(
+                            value: lowPriority.toDouble(),
+                            color: AppColors.lowPriority,
+                            title: '${((lowPriority / total) * 100).toStringAsFixed(0)}%',
+                            titleStyle: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            radius: 35,
                           ),
-                          radius: 35,
-                        ),
                       ],
                     ),
                   ),
@@ -376,19 +454,19 @@ class AnalyticsDashboard extends StatelessWidget {
                       _PriorityLegendItem(
                         color: AppColors.highPriority,
                         label: 'Haute',
-                        count: stats.highPriority,
+                        count: highPriority,
                       ),
                       const SizedBox(height: 12),
                       _PriorityLegendItem(
                         color: AppColors.mediumPriority,
                         label: 'Moyenne',
-                        count: stats.mediumPriority,
+                        count: mediumPriority,
                       ),
                       const SizedBox(height: 12),
                       _PriorityLegendItem(
                         color: AppColors.lowPriority,
                         label: 'Basse',
-                        count: stats.lowPriority,
+                        count: lowPriority,
                       ),
                     ],
                   ),
@@ -399,12 +477,16 @@ class AnalyticsDashboard extends StatelessWidget {
         ),
       ),
     );
+      },
+    );
   }
 
   Widget _buildDepartmentSection(BuildContext context) {
-    final departments = MockData.departments;
-    
-    return Padding(
+    return Consumer<AnomalyProvider>(
+      builder: (context, provider, child) {
+        final departments = provider.departmentAnalytics;
+        
+        return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,21 +523,157 @@ class AnalyticsDashboard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ...departments.take(3).map((dept) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: DepartmentCardCompact(
-              department: dept,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DepartmentAnalyticsScreen(),
+          if (departments.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                );
-              },
-            ),
-          )),
+                ],
+              ),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.business_rounded,
+                      size: 48,
+                      color: AppColors.textLight.withOpacity(0.5),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Aucune donnée par département',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...departments.take(3).map((dept) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _DepartmentCardCompact(
+                department: dept,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DepartmentAnalyticsScreen(),
+                    ),
+                  );
+                },
+              ),
+            )),
         ],
+      ),
+    );
+      },
+    );
+  }
+}
+
+class _DepartmentCardCompact extends StatelessWidget {
+  final DepartmentAnalytics department;
+  final VoidCallback? onTap;
+
+  const _DepartmentCardCompact({
+    required this.department,
+    this.onTap,
+  });
+
+  IconData _getIcon() {
+    switch (department.icon) {
+      case 'build':
+        return Icons.build_rounded;
+      case 'electric_bolt':
+        return Icons.electric_bolt_rounded;
+      case 'health_and_safety':
+        return Icons.health_and_safety_rounded;
+      case 'foundation':
+        return Icons.foundation_rounded;
+      case 'security':
+        return Icons.security_rounded;
+      case 'eco':
+        return Icons.eco_rounded;
+      default:
+        return Icons.folder_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _getIcon(),
+                color: AppColors.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    department.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '${department.resolvedAnomalies}/${department.totalAnomalies} résolues',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${department.resolutionRate.toStringAsFixed(0)}%',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: department.resolutionRate >= 70
+                    ? AppColors.success
+                    : AppColors.warning,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
