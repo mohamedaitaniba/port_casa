@@ -62,17 +62,12 @@ class AnomalyProvider extends ChangeNotifier {
       _isOnline = isConnected;
       notifyListeners();
       if (isConnected) {
-        // Sync when connection is restored
         _syncService.syncPendingAnomalies().then((_) => _updatePendingCount());
       }
     });
     _connectivity.checkConnection().then((connected) {
       _isOnline = connected;
       notifyListeners();
-      // If already connected, try to sync pending anomalies
-      if (connected) {
-        _syncService.syncPendingAnomalies().then((_) => _updatePendingCount());
-      }
     });
   }
 
@@ -302,107 +297,6 @@ class AnomalyProvider extends ChangeNotifier {
       ? (resolvedAnomalies / totalAnomalies) * 100 
       : 0;
 
-  // Analytics Statistics
-  
-  // Priority statistics
-  int get mediumPriorityAnomalies =>
-      _anomalies.where((a) => a.priority == AnomalyPriority.medium).length;
-  
-  int get lowPriorityAnomalies =>
-      _anomalies.where((a) => a.priority == AnomalyPriority.low).length;
-
-  // Monthly data for trend chart (last 6 months)
-  List<MonthlyAnalyticsData> get monthlyAnalytics {
-    final now = DateTime.now();
-    final List<MonthlyAnalyticsData> monthlyData = [];
-    
-    final monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-    
-    for (int i = 5; i >= 0; i--) {
-      // Calculate month date correctly handling year overflow
-      int targetMonth = now.month - i;
-      int targetYear = now.year;
-      
-      while (targetMonth < 1) {
-        targetMonth += 12;
-        targetYear -= 1;
-      }
-      while (targetMonth > 12) {
-        targetMonth -= 12;
-        targetYear += 1;
-      }
-      
-      final monthDate = DateTime(targetYear, targetMonth, 1);
-      final nextMonth = targetMonth == 12 
-          ? DateTime(targetYear + 1, 1, 1)
-          : DateTime(targetYear, targetMonth + 1, 1);
-      
-      final monthAnomalies = _anomalies.where((anomaly) {
-        return anomaly.createdAt.isAfter(monthDate.subtract(const Duration(days: 1))) &&
-               anomaly.createdAt.isBefore(nextMonth);
-      }).toList();
-      
-      final resolved = monthAnomalies.where((a) => a.status == AnomalyStatus.resolu).length;
-      
-      monthlyData.add(MonthlyAnalyticsData(
-        month: monthNames[targetMonth - 1],
-        total: monthAnomalies.length,
-        resolved: resolved,
-      ));
-    }
-    
-    return monthlyData;
-  }
-
-  // Department statistics
-  List<DepartmentAnalytics> get departmentAnalytics {
-    final Map<String, List<Anomaly>> deptMap = {};
-    
-    // Group anomalies by department
-    for (var anomaly in _anomalies) {
-      final dept = anomaly.department ?? 'Non assigné';
-      if (!deptMap.containsKey(dept)) {
-        deptMap[dept] = [];
-      }
-      deptMap[dept]!.add(anomaly);
-    }
-    
-    // Convert to DepartmentAnalytics list
-    return deptMap.entries.map((entry) {
-      final anomalies = entry.value;
-      final resolved = anomalies.where((a) => a.status == AnomalyStatus.resolu).length;
-      final open = anomalies.where((a) => a.status == AnomalyStatus.ouvert).length;
-      final inProgress = anomalies.where((a) => a.status == AnomalyStatus.enCours).length;
-      
-      return DepartmentAnalytics(
-        name: entry.key,
-        totalAnomalies: anomalies.length,
-        resolvedAnomalies: resolved,
-        openAnomalies: open,
-        inProgressAnomalies: inProgress,
-        icon: _getDepartmentIcon(entry.key),
-      );
-    }).toList()
-      ..sort((a, b) => b.totalAnomalies.compareTo(a.totalAnomalies));
-  }
-
-  String _getDepartmentIcon(String department) {
-    final deptLower = department.toLowerCase();
-    if (deptLower.contains('mécanique') || deptLower.contains('maintenance')) {
-      return 'build';
-    } else if (deptLower.contains('électrique')) {
-      return 'electric_bolt';
-    } else if (deptLower.contains('hse') || deptLower.contains('sécurité')) {
-      return 'health_and_safety';
-    } else if (deptLower.contains('infrastructure') || deptLower.contains('exploitation')) {
-      return 'foundation';
-    } else if (deptLower.contains('environnement')) {
-      return 'eco';
-    } else {
-      return 'folder';
-    }
-  }
-
   void _setLoading(bool value) {
     _isLoading = value;
   }
@@ -414,40 +308,5 @@ class AnomalyProvider extends ChangeNotifier {
   void _clearError() {
     _error = null;
   }
-}
-
-// Analytics data classes
-class MonthlyAnalyticsData {
-  final String month;
-  final int total;
-  final int resolved;
-
-  MonthlyAnalyticsData({
-    required this.month,
-    required this.total,
-    required this.resolved,
-  });
-}
-
-class DepartmentAnalytics {
-  final String name;
-  final int totalAnomalies;
-  final int resolvedAnomalies;
-  final int openAnomalies;
-  final int inProgressAnomalies;
-  final String icon;
-
-  DepartmentAnalytics({
-    required this.name,
-    required this.totalAnomalies,
-    required this.resolvedAnomalies,
-    required this.openAnomalies,
-    required this.inProgressAnomalies,
-    required this.icon,
-  });
-
-  double get resolutionRate => totalAnomalies > 0 
-      ? (resolvedAnomalies / totalAnomalies) * 100 
-      : 0;
 }
 

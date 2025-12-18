@@ -22,6 +22,54 @@ class AuthProvider extends ChangeNotifier {
       _firebaseUser = user;
       if (user != null) {
         _appUser = await _authService.getUserData(user.uid);
+        
+        // If user document doesn't exist in Firestore, create it
+        // This handles users created directly in Firebase Auth console
+        if (_appUser == null && user.email != null) {
+          try {
+            print('User document not found, creating it for UID: ${user.uid}');
+            
+            // Extract name from email (before @) or use displayName
+            String name;
+            if (user.displayName != null && user.displayName!.isNotEmpty) {
+              name = user.displayName!;
+            } else {
+              // Generate name from email: "john.doe@example.com" -> "John Doe"
+              final emailPart = user.email!.split('@')[0];
+              name = emailPart
+                  .replaceAll('.', ' ')
+                  .split(' ')
+                  .map((word) => word.isEmpty 
+                      ? '' 
+                      : word[0].toUpperCase() + word.substring(1))
+                  .where((word) => word.isNotEmpty)
+                  .join(' ');
+              
+              if (name.isEmpty) {
+                name = 'Utilisateur';
+              }
+            }
+            
+            print('Creating user document with name: $name, email: ${user.email}');
+            
+            await _authService.createUserDocument(
+              uid: user.uid,
+              email: user.email!,
+              name: name,
+              role: UserRole.inspecteur, // Default role
+            );
+            
+            print('User document created successfully');
+            
+            // Reload user data
+            _appUser = await _authService.getUserData(user.uid);
+            print('User data reloaded: ${_appUser != null ? "Success" : "Failed"}');
+          } catch (e, stackTrace) {
+            print('Error creating user document: $e');
+            print('Stack trace: $stackTrace');
+            // Continue without user document - user can still use the app
+          }
+        }
       } else {
         _appUser = null;
       }

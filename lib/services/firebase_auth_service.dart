@@ -79,6 +79,53 @@ class FirebaseAuthService {
     }
   }
 
+  // Create or update user document in Firestore (useful for users created directly in Firebase Auth)
+  Future<void> createUserDocument({
+    required String uid,
+    required String email,
+    required String name,
+    UserRole role = UserRole.inspecteur,
+  }) async {
+    try {
+      print('createUserDocument called: uid=$uid, email=$email, name=$name, role=${role.value}');
+      
+      final userDoc = _firestore.collection('users').doc(uid);
+      final docSnapshot = await userDoc.get();
+      
+      print('Document exists: ${docSnapshot.exists}');
+      
+      if (!docSnapshot.exists) {
+        // Create new document
+        final data = {
+          'name': name,
+          'email': email,
+          'role': role.value,
+          'createdAt': FieldValue.serverTimestamp(),
+        };
+        
+        print('Creating document with data: $data');
+        
+        await userDoc.set(data);
+        
+        print('Document created successfully');
+      } else {
+        print('Document already exists, updating...');
+        // Update existing document (merge)
+        await userDoc.set({
+          'name': name,
+          'email': email,
+          'role': role.value,
+        }, SetOptions(merge: true));
+        
+        print('Document updated successfully');
+      }
+    } catch (e, stackTrace) {
+      print('Error in createUserDocument: $e');
+      print('Stack trace: $stackTrace');
+      throw Exception('Erreur lors de la création du document utilisateur: $e');
+    }
+  }
+
   // Sign out
   Future<void> signOut() async {
     await _auth.signOut();

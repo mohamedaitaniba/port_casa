@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum UserRole {
   inspecteur('inspecteur', 'Inspecteur'),
-  superviseur('superviseur', 'Superviseur'),
-  admin('admin', 'Administrateur');
+  manager('manager', 'Manager'),
+  technicien('technicien', 'Technicien');
 
   final String value;
   final String label;

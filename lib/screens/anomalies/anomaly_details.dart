@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../models/anomaly.dart';
 import '../../models/comment.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/anomaly_provider.dart';
 import '../../services/comment_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/role_permissions.dart';
 import '../../widgets/status_badge.dart';
 
 class AnomalyDetailsScreen extends StatefulWidget {
@@ -365,71 +367,79 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
   }
 
   Widget _buildBottomActions(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        final userRole = authProvider.appUser?.role;
+        final canChangeStatus = userRole != null &&
+            RolePermissions.canChangeStatus(userRole, widget.anomaly.status);
+
+        return Container(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          if (widget.anomaly.status != AnomalyStatus.resolu) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  _showStatusChangeDialog(context);
-                },
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              if (canChangeStatus && widget.anomaly.status != AnomalyStatus.resolu) ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      _showStatusChangeDialog(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.update_rounded),
+                    label: Text(
+                      'Changer statut',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
-                icon: const Icon(Icons.update_rounded),
-                label: Text(
-                  'Changer statut',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                flex: canChangeStatus && widget.anomaly.status != AnomalyStatus.resolu ? 1 : 2,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    _showCommentDialog(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
+                  label: Text(
+                    'Commentaire',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            flex: widget.anomaly.status != AnomalyStatus.resolu ? 1 : 2,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                _showCommentDialog(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-              label: Text(
-                'Commentaire',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -478,6 +488,43 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
   }
 
   void _showStatusChangeDialog(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userRole = authProvider.appUser?.role;
+
+    if (userRole == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erreur: Rôle utilisateur non trouvé',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final allowedStatuses = RolePermissions.getAllowedStatusTransitions(
+      userRole,
+      widget.anomaly.status,
+    );
+
+    // Filter out the current status from the options, unless it's the only option
+    final displayStatuses = allowedStatuses.where((s) => s != widget.anomaly.status).toList();
+
+    if (displayStatuses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Vous n\'avez pas la permission de changer ce statut',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -488,7 +535,7 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: AnomalyStatus.values.map((status) {
+          children: displayStatuses.map((status) {
             return ListTile(
               leading: Icon(
                 _getStatusIcon(status),
@@ -496,15 +543,114 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
               ),
               title: Text(status.labelFr, style: GoogleFonts.poppins()),
               selected: widget.anomaly.status == status,
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Update status
+                await _updateStatus(context, status);
               },
             );
           }).toList(),
         ),
       ),
     );
+  }
+
+  Future<void> _updateStatus(BuildContext context, AnomalyStatus newStatus) async {
+    if (!context.mounted) return;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Show loading indicator
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Mise à jour du statut...',
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.info,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final anomalyProvider = Provider.of<AnomalyProvider>(context, listen: false);
+      await anomalyProvider.updateAnomalyStatus(widget.anomaly.id, newStatus);
+
+      if (!context.mounted) return;
+
+      // Remove loading snackbar and show success
+      scaffoldMessenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(
+                  'Statut mis à jour avec succès',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      // Remove loading snackbar and show error
+      scaffoldMessenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Erreur lors de la mise à jour',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  e.toString(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.white,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+    }
   }
 
   IconData _getStatusIcon(AnomalyStatus status) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/anomaly.dart';
+import '../../models/user.dart';
 import '../../providers/anomaly_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
@@ -151,150 +152,189 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHeader(BuildContext context) {
     return Consumer<AnomalyProvider>(
       builder: (context, anomalyProvider, child) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Row(
+        return Consumer<AuthProvider>(
+          builder: (context, authProvider, child) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Bonjour 👋',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Dashboard',
-                          style: GoogleFonts.poppins(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Connectivity & Sync Status - Always visible, clickable if pending
-                  GestureDetector(
-                    onTap: anomalyProvider.pendingCount > 0 && anomalyProvider.isOnline
-                        ? () async {
-                            // Force manual sync
-                            await anomalyProvider.syncPendingAnomalies();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.check_circle_rounded, color: Colors.white),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        'Synchronisation en cours...',
-                                        style: GoogleFonts.poppins(color: Colors.white),
-                                      ),
-                                    ],
-                                  ),
-                                  backgroundColor: AppColors.info,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Bonjour 👋',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
-                              );
-                            }
-                          }
-                        : null,
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: !anomalyProvider.isOnline 
-                          ? AppColors.warning.withOpacity(0.1)
-                          : anomalyProvider.pendingCount > 0
-                            ? AppColors.info.withOpacity(0.1)
-                            : AppColors.success.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: !anomalyProvider.isOnline 
-                            ? AppColors.warning
-                            : anomalyProvider.pendingCount > 0
-                              ? AppColors.info
-                              : AppColors.success,
-                          width: 1.5,
+                                // User Role Badge - Small, next to "Bonjour"
+                                if (authProvider.appUser != null) ...[
+                                  const SizedBox(width: 8),
+                                  _buildRoleBadge(authProvider.appUser!.role),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Dashboard',
+                              style: GoogleFonts.poppins(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            !anomalyProvider.isOnline 
-                              ? Icons.cloud_off_rounded
-                              : anomalyProvider.pendingCount > 0
-                                ? Icons.sync_rounded
-                                : Icons.cloud_done_rounded,
-                            size: 16,
+                      // Connectivity & Sync Status - Always visible
+                      Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: !anomalyProvider.isOnline 
+                            ? AppColors.warning.withOpacity(0.1)
+                            : anomalyProvider.pendingCount > 0
+                              ? AppColors.info.withOpacity(0.1)
+                              : AppColors.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
                             color: !anomalyProvider.isOnline 
                               ? AppColors.warning
                               : anomalyProvider.pendingCount > 0
                                 ? AppColors.info
                                 : AppColors.success,
+                            width: 1.5,
                           ),
-                          const SizedBox(width: 6),
-                          if (anomalyProvider.pendingCount > 0)
-                            Text(
-                              '${anomalyProvider.pendingCount}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.info,
-                              ),
-                            )
-                          else if (anomalyProvider.isOnline)
-                            Text(
-                              'En ligne',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.success,
-                              ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              !anomalyProvider.isOnline 
+                                ? Icons.cloud_off_rounded
+                                : anomalyProvider.pendingCount > 0
+                                  ? Icons.sync_rounded
+                                  : Icons.cloud_done_rounded,
+                              size: 16,
+                              color: !anomalyProvider.isOnline 
+                                ? AppColors.warning
+                                : anomalyProvider.pendingCount > 0
+                                  ? AppColors.info
+                                  : AppColors.success,
                             ),
-                        ],
+                            const SizedBox(width: 6),
+                            if (anomalyProvider.pendingCount > 0)
+                              Text(
+                                '${anomalyProvider.pendingCount}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.info,
+                                ),
+                              )
+                            else if (anomalyProvider.isOnline)
+                              Text(
+                                'En ligne',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _showLogoutDialog(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                      GestureDetector(
+                        onTap: () => _showLogoutDialog(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: const Icon(
+                            Icons.logout_rounded,
+                            color: AppColors.error,
+                            size: 24,
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.logout_rounded,
-                        color: AppColors.error,
-                        size: 24,
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildRoleBadge(UserRole role) {
+    IconData icon;
+    Color color;
+    String label;
+
+    switch (role) {
+      case UserRole.inspecteur:
+        icon = Icons.search_rounded;
+        color = AppColors.info;
+        label = 'Inspecteur';
+        break;
+      case UserRole.manager:
+        icon = Icons.manage_accounts_rounded;
+        color = AppColors.warning;
+        label = 'Manager';
+        break;
+      case UserRole.technicien:
+        icon = Icons.build_rounded;
+        color = AppColors.success;
+        label = 'Technicien';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
