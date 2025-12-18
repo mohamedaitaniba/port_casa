@@ -176,7 +176,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 // User Role Badge - Small, next to "Bonjour"
                                 if (authProvider.appUser != null) ...[
                                   const SizedBox(width: 8),
-                                  _buildRoleBadge(authProvider.appUser!.role),
+                                  Builder(
+                                    builder: (context) {
+                                      print('Building role badge for role: ${authProvider.appUser!.role.value}');
+                                      return _buildRoleBadge(authProvider.appUser!.role);
+                                    },
+                                  ),
                                 ],
                               ],
                             ),

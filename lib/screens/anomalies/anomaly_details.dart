@@ -491,14 +491,20 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userRole = authProvider.appUser?.role;
 
+    print('_showStatusChangeDialog - appUser: ${authProvider.appUser != null ? "exists" : "null"}');
+    print('_showStatusChangeDialog - userRole: ${userRole?.value ?? "null"}');
+    print('_showStatusChangeDialog - current anomaly status: ${widget.anomaly.status.labelFr}');
+
     if (userRole == null) {
+      print('ERROR: User role is null!');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Erreur: Rôle utilisateur non trouvé',
+            'Erreur: Rôle utilisateur non trouvé. Veuillez vous déconnecter et vous reconnecter.',
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 5),
         ),
       );
       return;

@@ -21,7 +21,34 @@ class AuthProvider extends ChangeNotifier {
     _authService.authStateChanges.listen((user) async {
       _firebaseUser = user;
       if (user != null) {
+        print('Auth state changed, user UID: ${user.uid}, email: ${user.email}');
         _appUser = await _authService.getUserData(user.uid);
+        print('AppUser loaded by UID: ${_appUser != null ? "Yes" : "No"}');
+        
+        // If not found by UID, try to find by email (in case document was created with wrong ID)
+        if (_appUser == null && user.email != null) {
+          print('Trying to find user document by email: ${user.email}');
+          _appUser = await _authService.getUserDataByEmail(user.email!);
+          print('AppUser loaded by email: ${_appUser != null ? "Yes" : "No"}');
+          
+          // If found by email but with wrong ID, migrate it
+          if (_appUser != null && _appUser!.uid != user.uid) {
+            print('Found document with wrong ID (${_appUser!.uid}), migrating to correct UID (${user.uid})');
+            try {
+              await _authService.migrateUserDocument(_appUser!.uid, user.uid, user.email!);
+              // Reload with correct UID
+              _appUser = await _authService.getUserData(user.uid);
+              print('Migration successful, AppUser reloaded: ${_appUser != null ? "Yes" : "No"}');
+            } catch (e) {
+              print('Error during migration: $e');
+              // Continue with the found user even if migration fails
+            }
+          }
+        }
+        
+        if (_appUser != null) {
+          print('AppUser role: ${_appUser!.role.value}');
+        }
         
         // If user document doesn't exist in Firestore, create it
         // This handles users created directly in Firebase Auth console

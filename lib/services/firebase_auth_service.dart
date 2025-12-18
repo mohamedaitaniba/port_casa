@@ -57,16 +57,92 @@ class FirebaseAuthService {
     }
   }
 
-  // Get user data from Firestore
+  // Get user data from Firestore by UID
   Future<AppUser?> getUserData(String uid) async {
     try {
+      print('getUserData called for UID: $uid');
       final doc = await _firestore.collection('users').doc(uid).get();
+      print('Document exists: ${doc.exists}');
       if (doc.exists) {
-        return AppUser.fromFirestore(doc);
+        final data = doc.data();
+        print('Document data: $data');
+        if (data != null) {
+          print('Role from Firestore: ${data['role']}');
+          final appUser = AppUser.fromFirestore(doc);
+          print('Parsed role: ${appUser.role.value}');
+          return appUser;
+        }
       }
+      print('Document does not exist or has no data');
       return null;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Error in getUserData: $e');
+      print('Stack trace: $stackTrace');
       throw Exception('Erreur lors de la récupération des données utilisateur: $e');
+    }
+  }
+
+  // Get user data by email (fallback if document was created with wrong ID)
+  Future<AppUser?> getUserDataByEmail(String email) async {
+    try {
+      print('getUserDataByEmail called for email: $email');
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      
+      if (querySnapshot.docs.isNotEmpty) {
+        final doc = querySnapshot.docs.first;
+        print('Found document with ID: ${doc.id}');
+        final data = doc.data();
+        print('Document data: $data');
+        print('Role from Firestore: ${data['role']}');
+        final appUser = AppUser.fromFirestore(doc);
+        print('Parsed role: ${appUser.role.value}');
+        return appUser;
+      }
+      print('No document found with email: $email');
+      return null;
+    } catch (e, stackTrace) {
+      print('Error in getUserDataByEmail: $e');
+      print('Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
+  // Migrate user document from old ID to correct UID
+  Future<void> migrateUserDocument(String oldDocId, String correctUid, String email) async {
+    try {
+      print('Migrating user document from $oldDocId to $correctUid');
+      
+      // Get the old document
+      final oldDoc = await _firestore.collection('users').doc(oldDocId).get();
+      if (!oldDoc.exists) {
+        print('Old document does not exist');
+        return;
+      }
+      
+      final oldData = oldDoc.data();
+      if (oldData == null) {
+        print('Old document has no data');
+        return;
+      }
+      
+      print('Old document data: $oldData');
+      
+      // Create document with correct UID
+      await _firestore.collection('users').doc(correctUid).set(oldData);
+      print('Document created with correct UID');
+      
+      // Delete old document
+      await _firestore.collection('users').doc(oldDocId).delete();
+      print('Old document deleted');
+      
+    } catch (e, stackTrace) {
+      print('Error migrating user document: $e');
+      print('Stack trace: $stackTrace');
+      throw Exception('Erreur lors de la migration du document utilisateur: $e');
     }
   }
 
