@@ -6,6 +6,7 @@ class Comment {
   final String text;
   final String createdBy;
   final DateTime createdAt;
+  final String? imageUrl;
 
   Comment({
     required this.id,
@@ -13,6 +14,7 @@ class Comment {
     required this.text,
     required this.createdBy,
     required this.createdAt,
+    this.imageUrl,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +25,7 @@ class Comment {
       text: data['text'] ?? '',
       createdBy: data['createdBy'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      imageUrl: data['imageUrl'],
     );
   }
 
@@ -32,7 +35,26 @@ class Comment {
       'text': text,
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
+      if (imageUrl != null) 'imageUrl': imageUrl,
     };
+  }
+
+  Comment copyWith({
+    String? id,
+    String? anomalyId,
+    String? text,
+    String? createdBy,
+    DateTime? createdAt,
+    String? imageUrl,
+  }) {
+    return Comment(
+      id: id ?? this.id,
+      anomalyId: anomalyId ?? this.anomalyId,
+      text: text ?? this.text,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+    );
   }
 }
 

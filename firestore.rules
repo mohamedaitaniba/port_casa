@@ -70,7 +70,9 @@ service cloud.firestore {
              data.anomalyId is string &&
              data.text is string &&
              data.createdBy is string &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             // imageUrl is optional
+             (!('imageUrl' in data) || data.imageUrl is string);
     }
 
     // Helper function to validate notification data structure

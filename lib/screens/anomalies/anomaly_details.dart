@@ -1,12 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/anomaly.dart';
 import '../../models/comment.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/anomaly_provider.dart';
 import '../../services/comment_service.dart';
+import '../../services/firebase_storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/role_permissions.dart';
 import '../../widgets/status_badge.dart';
@@ -26,6 +30,7 @@ class AnomalyDetailsScreen extends StatefulWidget {
 class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
   final _commentService = CommentService();
   final _commentController = TextEditingController();
+  final _storageService = FirebaseStorageService();
 
   @override
   void dispose() {
@@ -684,57 +689,193 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
   void _showCommentDialog(BuildContext context) {
     _commentController.clear();
     
+    // Variable to persist image selection across rebuilds
+    XFile? dialogSelectedImage;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
-                Icons.add_comment_rounded,
-                color: AppColors.primary,
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.add_comment_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Ajouter un commentaire',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Ajouter un commentaire',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: TextField(
-          controller: _commentController,
-          maxLines: 5,
-          style: GoogleFonts.poppins(fontSize: 15),
-          decoration: InputDecoration(
-            hintText: 'Écrivez votre commentaire...',
-            hintStyle: GoogleFonts.poppins(
-              color: AppColors.textLight,
-              fontSize: 15,
-            ),
-            filled: true,
-            fillColor: AppColors.background,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _commentController,
+                      maxLines: 5,
+                      style: GoogleFonts.poppins(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: 'Écrivez votre commentaire...',
+                        hintStyle: GoogleFonts.poppins(
+                          color: AppColors.textLight,
+                          fontSize: 15,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Image preview and selection
+                    if (dialogSelectedImage != null) ...[
+                      Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(dialogSelectedImage!.path),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setDialogState(() {
+                                    dialogSelectedImage = null;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    // Image selection buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final image = await _storageService.pickImageFromGallery();
+                                if (image != null) {
+                                  setDialogState(() {
+                                    dialogSelectedImage = image;
+                                  });
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Erreur: $e',
+                                        style: GoogleFonts.poppins(),
+                                      ),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.photo_library_rounded, size: 18),
+                            label: Text(
+                              'Galerie',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final image = await _storageService.pickImageFromCamera();
+                                if (image != null) {
+                                  setDialogState(() {
+                                    dialogSelectedImage = image;
+                                  });
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Erreur: $e',
+                                        style: GoogleFonts.poppins(),
+                                      ),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                            label: Text(
+                              'Caméra',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+              ],
             ),
           ),
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -747,11 +888,11 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (_commentController.text.trim().isEmpty) {
+              if (_commentController.text.trim().isEmpty && dialogSelectedImage == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Veuillez entrer un commentaire',
+                      'Veuillez entrer un commentaire ou ajouter une image',
                       style: GoogleFonts.poppins(),
                     ),
                     backgroundColor: AppColors.error,
@@ -760,10 +901,47 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
                 return;
               }
 
+              if (!context.mounted) return;
+
+              // Show loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: AppColors.primary),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Publication...',
+                          style: GoogleFonts.poppins(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+
               try {
                 final authProvider = Provider.of<AuthProvider>(context, listen: false);
                 final currentUser = authProvider.appUser;
                 final createdBy = currentUser?.name ?? authProvider.firebaseUser?.email ?? 'Utilisateur';
+
+                // Upload image if selected
+                String? imageUrl;
+                if (dialogSelectedImage != null) {
+                  imageUrl = await _storageService.uploadImage(
+                    dialogSelectedImage!,
+                    folder: 'comments',
+                  );
+                }
 
                 final comment = Comment(
                   id: '',
@@ -771,12 +949,14 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
                   text: _commentController.text.trim(),
                   createdBy: createdBy,
                   createdAt: DateTime.now(),
+                  imageUrl: imageUrl,
                 );
 
                 await _commentService.addComment(comment);
                 
                 if (context.mounted) {
-                  Navigator.pop(context);
+                  Navigator.pop(context); // Close loading dialog
+                  Navigator.pop(context); // Close comment dialog
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
@@ -799,7 +979,7 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
                 }
               } catch (e) {
                 if (context.mounted) {
-                  Navigator.pop(context);
+                  Navigator.pop(context); // Close loading dialog
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -828,6 +1008,8 @@ class _AnomalyDetailsScreenState extends State<AnomalyDetailsScreen> {
             ),
           ),
         ],
+      );
+        },
       ),
     );
   }
@@ -1244,14 +1426,106 @@ class _CommentCardState extends State<_CommentCard> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            widget.comment.text,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: AppColors.textPrimary,
-              height: 1.5,
+          if (widget.comment.text.isNotEmpty)
+            Text(
+              widget.comment.text,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+                height: 1.5,
+              ),
             ),
-          ),
+          if (widget.comment.imageUrl != null && widget.comment.imageUrl!.isNotEmpty) ...[
+            if (widget.comment.text.isNotEmpty) const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => Dialog(
+                    backgroundColor: Colors.transparent,
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: CachedNetworkImage(
+                            imageUrl: widget.comment.imageUrl!,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const CircularProgressIndicator(color: AppColors.primary),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.error_outline, color: AppColors.error),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 20,
+                          right: 20,
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: widget.comment.imageUrl!,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    height: 200,
+                    color: AppColors.background,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 200,
+                    color: AppColors.background,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.error),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Erreur de chargement',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
