@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/mock_data.dart';
+import '../providers/anomaly_provider.dart';
 import '../theme/app_theme.dart';
 
 class DepartmentCard extends StatelessWidget {
-  final Department department;
+  final DepartmentAnalytics department;
   final VoidCallback? onTap;
 
   const DepartmentCard({
@@ -226,7 +226,7 @@ class _StatItem extends StatelessWidget {
 }
 
 class DepartmentCardCompact extends StatelessWidget {
-  final Department department;
+  final DepartmentAnalytics department;
   final VoidCallback? onTap;
 
   const DepartmentCardCompact({
